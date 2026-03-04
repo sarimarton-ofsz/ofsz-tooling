@@ -8,9 +8,28 @@ VPN toolkit for macOS — unified CLI and menu bar control for Tailscale, AWS VP
 curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/main/install.sh | bash
 ```
 
+Requires [gum](https://github.com/charmbracelet/gum) for the installer UI: `brew install gum`
+
+## Structure
+
+```
+ofsz-tooling/
+├── install.sh          # Meta-installer (runs all tool installers)
+└── vpn/
+    ├── install.sh      # VPN tool installer (PATH, SwiftBar, prereqs)
+    ├── vpn             # CLI binary
+    ├── lib.sh          # Shared VPN library
+    ├── aws-connect.sh  # AWS VPN connector (SAML/CLI)
+    ├── aws-saml-server.py  # SAML capture server
+    ├── vpn.30s.sh      # SwiftBar menu bar plugin
+    └── run/            # Runtime data (gitignored)
+```
+
+The repo is cloned to `~/.config/ofsz-tooling/`. Each tool lives in its own directory with its own `install.sh`.
+
 ## What it does
 
-- Installs the `vpn` CLI to `~/.config/vpn/` and adds it to PATH
+- Installs the `vpn` CLI to `~/.config/ofsz-tooling/vpn/` and adds it to PATH
 - Symlinks a SwiftBar menu bar plugin (if SwiftBar is installed)
 - Checks prerequisites and tells you what's missing
 
@@ -18,6 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/main/i
 
 | Tool | Install |
 |---|---|
+| gum | `brew install gum` |
 | AWS VPN Client | https://aws.amazon.com/vpn/client-vpn-download/ |
 | Tailscale | https://tailscale.com/download/mac |
 | WatchGuard Mobile VPN with SSL | IT department |

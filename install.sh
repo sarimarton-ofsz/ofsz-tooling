@@ -1,166 +1,106 @@
 #!/usr/bin/env bash
-# OFSZ Tooling installer
+# OFSZ Tooling — meta-installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/main/install.sh | bash
 set -euo pipefail
 
-RED="\033[0;31m"; GREEN="\033[0;32m"; YELLOW="\033[1;33m"; BLUE="\033[0;34m"; NC="\033[0m"
-log()  { echo -e "${BLUE}[ofsz]${NC} $*"; }
-ok()   { echo -e "${GREEN}[ofsz ✓]${NC} $*"; }
-warn() { echo -e "${YELLOW}[ofsz !]${NC} $*"; }
-err()  { echo -e "${RED}[ofsz ✗]${NC} $*" >&2; }
-
 REPO_URL="https://github.com/sarimarton-ofsz/ofsz-tooling.git"
-INSTALL_DIR="$HOME/.config/vpn"
-SWIFTBAR_PLUGINS="$HOME/Library/Application Support/SwiftBar/Plugins"
+INSTALL_DIR="$HOME/.config/ofsz-tooling"
+OLD_INSTALL_DIR="$HOME/.config/vpn"
 
-# ── Step 1: Clone or update repo ─────────────────────────
-log "Installing OFSZ VPN toolkit..."
+# ── Ensure gum is available ──────────────────────────────
+if ! command -v gum &>/dev/null; then
+    echo "gum is required for the installer UI."
+    if command -v brew &>/dev/null; then
+        echo "Installing gum via Homebrew..."
+        brew install gum
+    else
+        echo "Install gum first: https://github.com/charmbracelet/gum#installation"
+        exit 1
+    fi
+fi
+
+header() {
+    echo ""
+    gum style --border rounded --border-foreground 212 --padding "0 2" --bold "$1"
+}
+
+# ── Migration from old ~/.config/vpn layout ──────────────
+migrate_old_install() {
+    if [ ! -d "$OLD_INSTALL_DIR/.git" ]; then
+        return
+    fi
+    if [ -d "$INSTALL_DIR/.git" ]; then
+        gum log --level warn "Old installation at $OLD_INSTALL_DIR still exists — skipping migration"
+        return
+    fi
+
+    header "Migrating old installation"
+    gum log --level info "Moving $OLD_INSTALL_DIR → $INSTALL_DIR"
+
+    mkdir -p "$(dirname "$INSTALL_DIR")"
+    mv "$OLD_INSTALL_DIR" "$INSTALL_DIR"
+
+    # Clean up old PATH from shell rc
+    local rc
+    for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+        if [ -f "$rc" ] && grep -qF '.config/vpn' "$rc" 2>/dev/null; then
+            gum log --level info "Removing old PATH entry from $rc"
+            sed -i '' '/# OFSZ VPN toolkit/d' "$rc"
+            sed -i '' '/\.config\/vpn/d' "$rc"
+        fi
+    done
+
+    # Remove old SwiftBar symlink (will be recreated by vpn/install.sh)
+    local old_link="$HOME/Library/Application Support/SwiftBar/Plugins/vpn.30s.sh"
+    if [ -L "$old_link" ]; then
+        rm "$old_link"
+        gum log --level info "Removed old SwiftBar symlink"
+    fi
+
+    gum log --level info --prefix "✓" "Migration complete"
+}
+
+# ── Step 1: Migrate if needed ────────────────────────────
+migrate_old_install
+
+# ── Step 2: Clone or update repo ─────────────────────────
+header "OFSZ Tooling Installer"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-    log "Updating existing installation..."
-    git -C "$INSTALL_DIR" pull --ff-only
+    gum spin --spinner dot --title "Updating repository..." -- \
+        git -C "$INSTALL_DIR" pull --ff-only
+    gum log --level info --prefix "✓" "Repository updated"
 else
     if [ -d "$INSTALL_DIR" ]; then
-        # Existing non-git vpn dir — back it up
-        warn "Backing up existing $INSTALL_DIR → ${INSTALL_DIR}.bak"
+        gum log --level warn "Backing up existing $INSTALL_DIR"
         mv "$INSTALL_DIR" "${INSTALL_DIR}.bak.$(date +%s)"
     fi
-    log "Cloning repo..."
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    gum spin --spinner dot --title "Cloning repository..." -- \
+        git clone "$REPO_URL" "$INSTALL_DIR"
+    gum log --level info --prefix "✓" "Repository cloned to $INSTALL_DIR"
 fi
 
-# The repo has vpn/ and swiftbar/ subdirs — we need vpn files at the top level
-# Restructure: move vpn/* to install dir root if cloned as full repo
-if [ -d "$INSTALL_DIR/vpn" ] && [ ! -f "$INSTALL_DIR/lib.sh" ]; then
-    log "Restructuring: moving vpn/ contents to $INSTALL_DIR root..."
-    # Keep swiftbar dir for symlinking
-    cp -a "$INSTALL_DIR/vpn/"* "$INSTALL_DIR/"
-fi
-
-chmod +x "$INSTALL_DIR/vpn" "$INSTALL_DIR/aws-connect.sh" "$INSTALL_DIR/lib.sh"
-mkdir -p "$INSTALL_DIR/run"
-
-ok "VPN toolkit installed at $INSTALL_DIR"
-
-# ── Step 2: Add vpn to PATH ──────────────────────────────
-log "Setting up PATH..."
-
-SHELL_RC=""
-if [ -f "$HOME/.zshrc" ]; then
-    SHELL_RC="$HOME/.zshrc"
-elif [ -f "$HOME/.bashrc" ]; then
-    SHELL_RC="$HOME/.bashrc"
-fi
-
-PATH_LINE='export PATH="$HOME/.config/vpn:$PATH"'
-if [ -n "$SHELL_RC" ]; then
-    if ! grep -qF '.config/vpn' "$SHELL_RC" 2>/dev/null; then
-        echo "" >> "$SHELL_RC"
-        echo "# OFSZ VPN toolkit" >> "$SHELL_RC"
-        echo "$PATH_LINE" >> "$SHELL_RC"
-        ok "Added vpn to PATH in $SHELL_RC"
-    else
-        ok "PATH already configured in $SHELL_RC"
-    fi
-else
-    warn "Could not detect shell rc file — add manually:"
-    echo "  $PATH_LINE"
-fi
-
-# ── Step 3: SwiftBar plugin ──────────────────────────────
-if [ -d "$SWIFTBAR_PLUGINS" ]; then
-    log "SwiftBar detected — installing VPN menu plugin..."
-    SWIFTBAR_SRC="$INSTALL_DIR/swiftbar/vpn.30s.sh"
-    SWIFTBAR_DEST="$SWIFTBAR_PLUGINS/vpn.30s.sh"
-    if [ -f "$SWIFTBAR_SRC" ]; then
-        ln -sf "$SWIFTBAR_SRC" "$SWIFTBAR_DEST"
-        chmod +x "$SWIFTBAR_SRC"
-        ok "SwiftBar plugin symlinked: $SWIFTBAR_DEST → $SWIFTBAR_SRC"
-    fi
-else
-    log "SwiftBar not found — skipping menu bar plugin"
-    log "  Install SwiftBar: brew install --cask swiftbar"
-    log "  Then re-run this installer"
-fi
-
-# ── Step 4: Prerequisites check ──────────────────────────
-echo ""
-log "Checking prerequisites..."
+# ── Step 3: Run tool-specific installers ─────────────────
 failed=0
 
-# Tailscale
-if [ -x "/Applications/Tailscale.app/Contents/MacOS/Tailscale" ]; then
-    ok "Tailscale: installed"
-else
-    warn "Tailscale: not installed"
-    echo "    Install: https://tailscale.com/download/mac"
-    failed=1
-fi
+for installer in "$INSTALL_DIR"/*/install.sh; do
+    [ -f "$installer" ] || continue
+    tool_name="$(basename "$(dirname "$installer")")"
+    header "Installing: $tool_name"
+    bash "$installer" || failed=1
+done
 
-# AWS VPN Client
-OVPN_BIN="/Applications/AWS VPN Client/AWS VPN Client.app/Contents/Resources/openvpn/acvc-openvpn"
-if [ -x "$OVPN_BIN" ]; then
-    ok "AWS VPN Client: installed"
-    # Check sudoers
-    if sudo -n "$OVPN_BIN" --version &>/dev/null; then
-        ok "AWS VPN sudoers: configured"
-    else
-        warn "AWS VPN sudoers: not configured"
-        echo "    Run: vpn setup"
-    fi
-else
-    warn "AWS VPN Client: not installed"
-    echo "    Install: https://aws.amazon.com/vpn/client-vpn-download/"
-    failed=1
-fi
-
-# AWS VPN profile
-AWS_PROFILES="$HOME/.config/AWSVPNClient/ConnectionProfiles"
-if [ -f "$AWS_PROFILES" ]; then
-    ok "AWS VPN profile: found"
-else
-    warn "AWS VPN profile: not configured"
-    echo "    Open AWS VPN Client → File → Manage Profiles → Add Profile"
-    echo "    Connect once via GUI, then CLI will work"
-fi
-
-# WatchGuard
-if pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
-    ok "WatchGuard: running"
-else
-    warn "WatchGuard: not running (may not be installed)"
-    echo "    Install WatchGuard Mobile VPN with SSL if needed"
-fi
-
-# WatchGuard password
-if security find-generic-password -s "vpn-watchguard" -w &>/dev/null; then
-    ok "WatchGuard password: stored in keychain"
-else
-    warn "WatchGuard password: not stored"
-    echo "    Run: vpn wg-set-password"
-fi
-
-# Python 3
-if command -v python3 &>/dev/null; then
-    ok "Python 3: $(python3 --version 2>&1)"
-else
-    warn "Python 3: not found (needed for AWS SAML auth)"
-    echo "    Install: xcode-select --install"
-    failed=1
-fi
-
-# ── Done ──────────────────────────────────────────────────
+# ── Done ─────────────────────────────────────────────────
 echo ""
-echo "─────────────────────────────────────────────"
 if [ $failed -eq 0 ]; then
-    ok "Installation complete! Open a new terminal and run: vpn status"
+    gum style --border double --border-foreground 76 --padding "0 2" --bold \
+        "✓ All tools installed!" \
+        "" \
+        "Open a new terminal, then run: vpn help"
 else
-    ok "Installation complete (with warnings above)"
-    echo "    Fix the warnings, then run: vpn status"
+    gum style --border double --border-foreground 214 --padding "0 2" --bold \
+        "! Installation complete with warnings" \
+        "" \
+        "Fix warnings above, then run: vpn help"
 fi
 echo ""
-echo "  Commands:    vpn help"
-echo "  Presets:     vpn preset all    (AWS + WatchGuard + Tailscale)"
-echo "               vpn preset aws-ts (AWS + Tailscale)"
-echo "  SwiftBar:    menu bar VPN icon with status + controls"
-echo "─────────────────────────────────────────────"

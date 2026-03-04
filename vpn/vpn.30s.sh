@@ -9,7 +9,7 @@
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
-VPN_DIR="$HOME/.config/vpn"
+VPN_DIR="$HOME/.config/ofsz-tooling/vpn"
 VPN="$VPN_DIR/vpn"
 TS_CLI="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 

@@ -2,7 +2,7 @@
 # aws-connect.sh — CLI-based AWS Client VPN with SAML/Entra ID auth
 # Replaces the AWS VPN Client GUI entirely.
 #
-# Usage: ~/.config/vpn/aws-connect.sh [up|down|status]
+# Usage: ~/.config/ofsz-tooling/vpn/aws-connect.sh [up|down|status]
 #
 # Runs as YOUR user. Only the final openvpn call uses sudo (for tun device).
 # Run `vpn setup-sudoers` once to allow passwordless sudo for the openvpn binary.
