@@ -38,40 +38,48 @@ for uninstaller in "$INSTALL_DIR"/*/uninstall.sh; do
 done
 
 if [ ${#mod_dirs[@]} -eq 0 ]; then
-    gum log --level warn "No uninstallable modules found"
-else
-    # Show modules
+    # Nothing installed — just clean up the repo and exit
+    gum log --level info "Nincs telepített modul"
+    rm -rf "$INSTALL_DIR"
+    gum log --level info --prefix "✓" "Repository removed"
     echo ""
-    gum style --bold "Telepített modulok"
-    for i in "${!mod_dirs[@]}"; do
-        label="${mod_names[$i]}"
-        [ -n "${mod_descs[$i]}" ] && label="${mod_names[$i]} — ${mod_descs[$i]}"
-        gum log --level info --prefix "✓" "$label"
-    done
-
-    # Select modules to uninstall
-    choices=()
-    for i in "${!mod_dirs[@]}"; do
-        label="${mod_names[$i]}"
-        [ -n "${mod_descs[$i]}" ] && label="${mod_names[$i]} — ${mod_descs[$i]}"
-        choices+=("$label")
-    done
-
+    gum style --border double --border-foreground 76 --padding "0 2" --bold \
+        "✓ Uninstall complete"
     echo ""
-    selected=$(printf '%s\n' "${choices[@]}" | gum choose --no-limit --header "Eltávolítandó modulok:")
+    exit 0
+fi
 
-    if [ -n "$selected" ]; then
-        while IFS= read -r sel; do
-            [ -n "$sel" ] || continue
-            for i in "${!choices[@]}"; do
-                if [ "${choices[$i]}" = "$sel" ]; then
-                    header "Uninstalling: ${mod_names[$i]}"
-                    bash "$INSTALL_DIR/${mod_dirs[$i]}/uninstall.sh"
-                    break
-                fi
-            done
-        done <<< "$selected"
-    fi
+# Show modules
+echo ""
+gum style --bold "Telepített modulok"
+for i in "${!mod_dirs[@]}"; do
+    label="${mod_names[$i]}"
+    [ -n "${mod_descs[$i]}" ] && label="${mod_names[$i]} — ${mod_descs[$i]}"
+    gum log --level info --prefix "✓" "$label"
+done
+
+# Select modules to uninstall
+choices=()
+for i in "${!mod_dirs[@]}"; do
+    label="${mod_names[$i]}"
+    [ -n "${mod_descs[$i]}" ] && label="${mod_names[$i]} — ${mod_descs[$i]}"
+    choices+=("$label")
+done
+
+echo ""
+selected=$(printf '%s\n' "${choices[@]}" | gum choose --no-limit --header "Eltávolítandó modulok:")
+
+if [ -n "$selected" ]; then
+    while IFS= read -r sel; do
+        [ -n "$sel" ] || continue
+        for i in "${!choices[@]}"; do
+            if [ "${choices[$i]}" = "$sel" ]; then
+                header "Uninstalling: ${mod_names[$i]}"
+                bash "$INSTALL_DIR/${mod_dirs[$i]}/uninstall.sh"
+                break
+            fi
+        done
+    done <<< "$selected"
 fi
 
 # ── Offer to remove the repo ────────────────────────────
