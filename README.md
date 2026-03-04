@@ -5,6 +5,8 @@ VPN kezelő macOS-re — Tailscale, AWS VPN és WatchGuard egy helyről.
 - Mind a 3 VPN csatlakoztatása biztonságos sorrendben, egy kattintással
 - Az AWS VPN Client GUI-ra nincs többé szükség — nincs több AWS ikon a Dockban
 
+![VPN menüsáv](vpn-menu.png)
+
 ## Telepítés
 
 ```bash
