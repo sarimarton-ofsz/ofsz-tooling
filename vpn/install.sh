@@ -61,6 +61,9 @@ if [ ! -d "$SWIFTBAR_PLUGINS" ]; then
 fi
 
 if [ -d "$SWIFTBAR_PLUGINS" ] && [ -f "$SWIFTBAR_SRC" ]; then
+    # Remove stale target first — ln -sf into an existing directory
+    # creates the link *inside* it instead of replacing it
+    rm -rf "$SWIFTBAR_DEST"
     ln -sf "$SWIFTBAR_SRC" "$SWIFTBAR_DEST"
     gum log --level info --prefix "✓" "SwiftBar plugin symlinked"
 fi

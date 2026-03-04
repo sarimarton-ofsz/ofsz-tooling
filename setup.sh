@@ -73,8 +73,11 @@ migrate_old_install
 header "OFSZ Tooling Installer"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-    gum spin --spinner dot --title "Updating repository..." -- \
-        git -C "$INSTALL_DIR" pull --ff-only
+    pull_output=$(git -C "$INSTALL_DIR" pull --ff-only 2>&1) || {
+        gum log --level warn "git pull failed — resetting to remote"
+        git -C "$INSTALL_DIR" stash --quiet 2>/dev/null || true
+        git -C "$INSTALL_DIR" pull --ff-only --quiet
+    }
     gum log --level info --prefix "✓" "Repository updated"
 else
     if [ -d "$INSTALL_DIR" ]; then
