@@ -150,7 +150,7 @@ for i in "${!mod_dirs[@]}"; do
 done
 
 echo ""
-selected=$(printf '%s\n' "${choices[@]}" | gum choose --no-limit --header "Telepítendő modulok:")
+selected=$(printf '%s\n' "${choices[@]}" | gum choose --no-limit --header "Telepíthető modulok:")
 
 if [ -z "$selected" ]; then
     echo ""
