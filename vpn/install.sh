@@ -4,7 +4,7 @@
 set -euo pipefail
 
 TOOL_DIR="$(cd "$(dirname "$0")" && pwd)"
-SWIFTBAR_PLUGINS="$HOME/Library/Application Support/SwiftBar/Plugins"
+SWIFTBAR_PLUGINS="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || echo "$HOME/Library/Application Support/SwiftBar/Plugins")"
 OVPN_BIN="/Applications/AWS VPN Client/AWS VPN Client.app/Contents/Resources/openvpn/acvc-openvpn"
 
 # Ensure gum is available (standalone mode)

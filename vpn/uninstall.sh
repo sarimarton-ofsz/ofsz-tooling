@@ -4,7 +4,7 @@
 set -euo pipefail
 
 TOOL_DIR="$(cd "$(dirname "$0")" && pwd)"
-SWIFTBAR_LINK="$HOME/Library/Application Support/SwiftBar/Plugins/vpn.30s.sh"
+SWIFTBAR_LINK="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || echo "$HOME/Library/Application Support/SwiftBar/Plugins")/vpn.30s.sh"
 SUDOERS_FILE="/etc/sudoers.d/vpn-aws"
 
 # Ensure gum is available
