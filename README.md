@@ -5,16 +5,14 @@ VPN toolkit for macOS — unified CLI and menu bar control for Tailscale, AWS VP
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/main/setup.sh | bash
 ```
-
-Requires [gum](https://github.com/charmbracelet/gum) for the installer UI: `brew install gum`
 
 ## Structure
 
 ```
 ofsz-tooling/
-├── install.sh          # Meta-installer (runs all tool installers)
+├── setup.sh            # Meta-installer (status, module selection, install)
 └── vpn/
     ├── install.sh      # VPN tool installer (PATH, SwiftBar, prereqs)
     ├── vpn             # CLI binary
@@ -25,23 +23,26 @@ ofsz-tooling/
     └── run/            # Runtime data (gitignored)
 ```
 
-The repo is cloned to `~/.config/ofsz-tooling/`. Each tool lives in its own directory with its own `install.sh`.
+The repo is cloned to `~/.config/ofsz-tooling/`. Each tool lives in its own directory with its own `install.sh` and `.description`.
 
 ## What it does
 
+- Auto-installs Homebrew and gum if missing
 - Installs the `vpn` CLI to `~/.config/ofsz-tooling/vpn/` and adds it to PATH
-- Symlinks a SwiftBar menu bar plugin (if SwiftBar is installed)
-- Checks prerequisites and tells you what's missing
+- Auto-installs SwiftBar and symlinks the menu bar plugin
+- Auto-configures sudoers for AWS VPN and prompts for WatchGuard password
+- Warns about native apps that need manual install (Tailscale, AWS VPN Client, WatchGuard)
 
-## Prerequisites
+## Prerequisites (auto-installed where possible)
 
 | Tool | Install |
 |---|---|
-| gum | `brew install gum` |
+| Homebrew | Auto-installed by setup.sh |
+| gum | Auto-installed by setup.sh |
+| SwiftBar | Auto-installed by setup.sh |
 | AWS VPN Client | https://aws.amazon.com/vpn/client-vpn-download/ |
 | Tailscale | https://tailscale.com/download/mac |
 | WatchGuard Mobile VPN with SSL | IT department |
-| SwiftBar (optional) | `brew install --cask swiftbar` |
 
 ## Usage
 
@@ -59,14 +60,9 @@ vpn help                # All commands
 
 ## First-time setup
 
-After install, run these once:
+The installer handles sudoers and WatchGuard password automatically. You only need to:
 
-```bash
-vpn setup               # Configure passwordless sudo for AWS openvpn binary
-vpn wg-set-password     # Store WatchGuard password in macOS Keychain
-```
-
-Then open AWS VPN Client GUI once → File → Manage Profiles → Add Profile → connect once. After that, the CLI takes over.
+1. Open AWS VPN Client GUI once → File → Manage Profiles → Add Profile → connect once. After that, the CLI takes over.
 
 ## SwiftBar menu
 
@@ -88,4 +84,4 @@ This ensures no route conflicts. Each VPN gets its own `utun` interface.
 
 ## Updating
 
-Re-run the install command — it does `git pull` if already cloned.
+Re-run the setup command — it does `git pull` if already cloned.

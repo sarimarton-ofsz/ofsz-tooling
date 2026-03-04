@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # OFSZ Tooling — meta-installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/main/setup.sh | bash
 set -euo pipefail
 
 REPO_URL="https://github.com/sarimarton-ofsz/ofsz-tooling.git"
