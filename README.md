@@ -23,7 +23,7 @@ Ezeket kézzel kell telepíteni a futtatás előtt:
 | Tailscale | https://tailscale.com/download/mac |
 | WatchGuard Mobile VPN with SSL | IT osztály |
 
-> Az AWS VPN Client GUI-ban egyszer csatlakozz kézzel (File → Manage Profiles → Add Profile). Ezután a CLI átveszi.
+> **Fontos:** A telepítő futtatása előtt mindhárom VPN-hez csatlakozz egyszer kézzel a saját alkalmazásán keresztül. Ez létrehozza a szükséges profilokat és konfigurációkat, amiket a CLI utána átvesz.
 
 ## Használat
 
