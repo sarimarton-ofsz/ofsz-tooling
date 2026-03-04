@@ -1,87 +1,87 @@
 # OFSZ Tooling
 
-VPN toolkit for macOS — unified CLI and menu bar control for Tailscale, AWS VPN, and WatchGuard.
+VPN eszközkészlet macOS-re — egységes CLI és menüsáv-vezérlés Tailscale, AWS VPN és WatchGuard számára.
 
-## Install
+## Telepítés
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/main/setup.sh | bash
 ```
 
-## Structure
+## Struktúra
 
 ```
 ofsz-tooling/
-├── setup.sh            # Meta-installer (status, module selection, install)
+├── setup.sh            # Meta-telepítő (állapot, modulválasztás, install)
 └── vpn/
-    ├── install.sh      # VPN tool installer (PATH, SwiftBar, prereqs)
-    ├── vpn             # CLI binary
-    ├── lib.sh          # Shared VPN library
-    ├── aws-connect.sh  # AWS VPN connector (SAML/CLI)
-    ├── aws-saml-server.py  # SAML capture server
-    ├── vpn.30s.sh      # SwiftBar menu bar plugin
-    └── run/            # Runtime data (gitignored)
+    ├── install.sh      # VPN modul telepítő (PATH, SwiftBar, előfeltételek)
+    ├── vpn             # CLI bináris
+    ├── lib.sh          # Megosztott VPN könyvtár
+    ├── aws-connect.sh  # AWS VPN csatlakozó (SAML/CLI)
+    ├── aws-saml-server.py  # SAML capture szerver
+    ├── vpn.30s.sh      # SwiftBar menüsáv plugin
+    └── run/            # Futásidejű adatok (gitignore-olt)
 ```
 
-The repo is cloned to `~/.config/ofsz-tooling/`. Each tool lives in its own directory with its own `install.sh` and `.description`.
+A repó a `~/.config/ofsz-tooling/` könyvtárba klónozódik. Minden eszköz saját könyvtárban él, saját `install.sh`-val és `.description` fájllal.
 
-## What it does
+## Mit csinál
 
-- Auto-installs Homebrew and gum if missing
-- Installs the `vpn` CLI to `~/.config/ofsz-tooling/vpn/` and adds it to PATH
-- Auto-installs SwiftBar and symlinks the menu bar plugin
-- Auto-configures sudoers for AWS VPN and prompts for WatchGuard password
-- Warns about native apps that need manual install (Tailscale, AWS VPN Client, WatchGuard)
+- Automatikusan telepíti a Homebrew-t és a gum-ot, ha hiányoznak
+- Telepíti a `vpn` CLI-t a `~/.config/ofsz-tooling/vpn/` könyvtárba és hozzáadja a PATH-hoz
+- Automatikusan telepíti a SwiftBar-t és belinkelni a menüsáv plugint
+- Automatikusan konfigurálja a sudoers-t az AWS VPN-hez és bekéri a WatchGuard jelszót
+- Figyelmeztet a kézzel telepítendő alkalmazásokra (Tailscale, AWS VPN Client, WatchGuard)
 
-## Prerequisites (auto-installed where possible)
+## Előfeltételek (ahol lehet, automatikusan települ)
 
-| Tool | Install |
+| Eszköz | Telepítés |
 |---|---|
-| Homebrew | Auto-installed by setup.sh |
-| gum | Auto-installed by setup.sh |
-| SwiftBar | Auto-installed by setup.sh |
+| Homebrew | Automatikus (setup.sh) |
+| gum | Automatikus (setup.sh) |
+| SwiftBar | Automatikus (setup.sh) |
 | AWS VPN Client | https://aws.amazon.com/vpn/client-vpn-download/ |
 | Tailscale | https://tailscale.com/download/mac |
-| WatchGuard Mobile VPN with SSL | IT department |
+| WatchGuard Mobile VPN with SSL | IT osztály |
 
-## Usage
+## Használat
 
 ```
-vpn status              # Show all VPN states
-vpn preset all          # Connect all three (safe order: AWS → WG → TS)
-vpn preset aws-ts       # Connect AWS + Tailscale
-vpn ts-up / ts-down     # Individual Tailscale control
-vpn aws-up / aws-down   # Individual AWS VPN control
-vpn wg-up / wg-down     # Individual WatchGuard control
-vpn kill-all            # Disconnect everything
-vpn check               # Full network diagnostics
-vpn help                # All commands
+vpn status              # Összes VPN állapota
+vpn preset all          # Mind a három csatlakoztatása (biztonságos sorrend: AWS → WG → TS)
+vpn preset aws-ts       # AWS + Tailscale csatlakoztatása
+vpn ts-up / ts-down     # Tailscale vezérlés
+vpn aws-up / aws-down   # AWS VPN vezérlés
+vpn wg-up / wg-down     # WatchGuard vezérlés
+vpn kill-all            # Minden lecsatlakoztatása
+vpn check               # Teljes hálózati diagnosztika
+vpn help                # Összes parancs
 ```
 
-## First-time setup
+## Első használat
 
-The installer handles sudoers and WatchGuard password automatically. You only need to:
+A telepítő automatikusan kezeli a sudoers-t és a WatchGuard jelszót. Csak ennyi kell kézzel:
 
-1. Open AWS VPN Client GUI once → File → Manage Profiles → Add Profile → connect once. After that, the CLI takes over.
+1. Nyisd meg az AWS VPN Client GUI-t → File → Manage Profiles → Add Profile → csatlakozz egyszer. Ezután a CLI átveszi.
 
-## SwiftBar menu
+## SwiftBar menü
 
-If SwiftBar is installed, a VPN icon appears in the menu bar showing how many VPNs are connected. The dropdown shows:
-- Status of each VPN (with interface/IP tooltips)
-- Preset buttons (Cmd+Opt+1 = All Three, Cmd+Opt+2 = AWS+TS)
-- Individual connect/disconnect controls
-- Kill All and Diagnostics
+Ha a SwiftBar telepítve van, egy VPN ikon jelenik meg a menüsávban, ami mutatja hány VPN csatlakozik. A lenyíló menüben:
+- Minden VPN állapota (interfész/IP tooltippel)
+- Preset gombok (Cmd+Opt+1 = Mind a három, Cmd+Opt+2 = AWS+TS)
+- Egyedi csatlakozás/lecsatlakozás gombok
+- Kill All és Diagnosztika
 
-## Preset ordering
+## Preset sorrend
 
-Presets force-disconnect all VPNs first, then reconnect in a safe order:
+A presetek először lecsatlakoztatnak mindent, majd biztonságos sorrendben újracsatlakoztatnak:
 
-1. **AWS VPN** first — sets aggressive routes (10.254.x gateway)
-2. **WatchGuard** second — adds private subnet routes (10.x, 172.x, 192.168.x)
-3. **Tailscale** last — uses CGNAT (100.x), most resilient, adapts to existing routes
+1. **AWS VPN** először — agresszív route-okat állít be (10.254.x gateway)
+2. **WatchGuard** másodszor — privát alhálózati route-okat ad hozzá (10.x, 172.x, 192.168.x)
+3. **Tailscale** utoljára — CGNAT-ot használ (100.x), a legrugalmasabb, alkalmazkodik a meglévő route-okhoz
 
-This ensures no route conflicts. Each VPN gets its own `utun` interface.
+Így nincs route ütközés. Minden VPN saját `utun` interfészt kap.
 
-## Updating
+## Frissítés
 
-Re-run the setup command — it does `git pull` if already cloned.
+Futtasd újra a telepítő parancsot — ha már klónozva van, `git pull`-t csinál.
