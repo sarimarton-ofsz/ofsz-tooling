@@ -86,27 +86,103 @@ else
     gum log --level info --prefix "✓" "Repository cloned to $INSTALL_DIR"
 fi
 
-# ── Step 3: Run tool-specific installers ─────────────────
-failed=0
+# ── Step 3: Status ───────────────────────────────────────
+echo ""
+gum style --bold "Állapot"
+gum log --level info --prefix "✓" "Homebrew: $(brew --version 2>&1 | head -1)"
+gum log --level info --prefix "✓" "gum: v$(gum --version 2>&1)"
+gum log --level info --prefix "✓" "Repo: $INSTALL_DIR"
+
+# Discover available modules
+mod_dirs=()
+mod_names=()
+mod_descs=()
 
 for installer in "$INSTALL_DIR"/*/install.sh; do
     [ -f "$installer" ] || continue
-    tool_name="$(basename "$(dirname "$installer")")"
-    header "Installing: $tool_name"
-    bash "$installer" || failed=1
+    mod="$(basename "$(dirname "$installer")")"
+    mod_dirs+=("$mod")
+    desc_file="$INSTALL_DIR/$mod/.description"
+    if [ -f "$desc_file" ]; then
+        mod_names+=("$(sed -n '1p' "$desc_file")")
+        mod_descs+=("$(sed -n '2p' "$desc_file")")
+    else
+        mod_names+=("$mod")
+        mod_descs+=("")
+    fi
 done
+
+if [ ${#mod_dirs[@]} -eq 0 ]; then
+    gum log --level warn "No installable modules found"
+    exit 0
+fi
+
+# Show module status
+echo ""
+gum style --bold "Modulok"
+for i in "${!mod_dirs[@]}"; do
+    mod="${mod_dirs[$i]}"
+    label="${mod_names[$i]}"
+    [ -n "${mod_descs[$i]}" ] && label="${mod_names[$i]} — ${mod_descs[$i]}"
+
+    installed=false
+    case "$mod" in
+        vpn)
+            if grep -qF '.config/ofsz-tooling/vpn' "${HOME}/.zshrc" 2>/dev/null || \
+               grep -qF '.config/ofsz-tooling/vpn' "${HOME}/.bashrc" 2>/dev/null; then
+                installed=true
+            fi ;;
+    esac
+
+    if $installed; then
+        gum log --level info --prefix "✓" "$label"
+    else
+        gum log --level info --prefix "○" "$label"
+    fi
+done
+
+# ── Step 4: Select modules ──────────────────────────────
+choices=()
+for i in "${!mod_dirs[@]}"; do
+    label="${mod_names[$i]}"
+    [ -n "${mod_descs[$i]}" ] && label="${mod_names[$i]} — ${mod_descs[$i]}"
+    choices+=("$label")
+done
+
+echo ""
+selected=$(printf '%s\n' "${choices[@]}" | gum choose --no-limit --header "Telepítendő modulok:")
+
+if [ -z "$selected" ]; then
+    echo ""
+    gum log --level info "Nincs kiválasztott modul"
+    exit 0
+fi
+
+# ── Step 5: Install selected modules ────────────────────
+failed=0
+
+while IFS= read -r sel; do
+    [ -n "$sel" ] || continue
+    for i in "${!choices[@]}"; do
+        if [ "${choices[$i]}" = "$sel" ]; then
+            header "Installing: ${mod_names[$i]}"
+            bash "$INSTALL_DIR/${mod_dirs[$i]}/install.sh" || failed=1
+            break
+        fi
+    done
+done <<< "$selected"
 
 # ── Done ─────────────────────────────────────────────────
 echo ""
 if [ $failed -eq 0 ]; then
     gum style --border double --border-foreground 76 --padding "0 2" --bold \
-        "✓ All tools installed!" \
+        "✓ All done!" \
         "" \
-        "Open a new terminal, then run: vpn help"
+        "Open a new terminal for PATH changes to take effect."
 else
     gum style --border double --border-foreground 214 --padding "0 2" --bold \
         "! Installation complete with warnings" \
         "" \
-        "Fix warnings above, then run: vpn help"
+        "Fix warnings above, then re-run the installer."
 fi
 echo ""
