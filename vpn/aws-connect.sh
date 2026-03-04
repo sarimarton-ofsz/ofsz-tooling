@@ -109,9 +109,15 @@ preflight_check() {
 
     # 5. Sudoers configured? (passwordless openvpn for tun device)
     if ! sudo -n "$OVPN_BIN" --version &>/dev/null; then
-        err "Passwordless sudo not configured for openvpn"
-        err "  Run once: vpn setup"
-        failed=1
+        log "Passwordless sudo not configured — setting up now..."
+        local ovpn_bin_escaped="${OVPN_BIN// /\\ }"
+        local sudoers_file="/etc/sudoers.d/vpn-aws"
+        printf '%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: /bin/kill *\n' \
+            "$USER" "$ovpn_bin_escaped" "$USER" | sudo tee "$sudoers_file" > /dev/null \
+            && sudo chmod 440 "$sudoers_file" \
+            && sudo visudo -cf "$sudoers_file" &>/dev/null \
+            && ok "Sudoers configured" \
+            || { err "Sudoers setup failed"; sudo rm -f "$sudoers_file" 2>/dev/null; failed=1; }
     fi
 
     return $failed
