@@ -7,16 +7,22 @@ REPO_URL="https://github.com/sarimarton-ofsz/ofsz-tooling.git"
 INSTALL_DIR="$HOME/.config/ofsz-tooling"
 OLD_INSTALL_DIR="$HOME/.config/vpn"
 
+# ── Ensure Homebrew is available ──────────────────────────
+if ! command -v brew &>/dev/null; then
+    echo "Homebrew not found — installing..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Add brew to PATH for the rest of this session
+    if [ -x /opt/homebrew/bin/brew ]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [ -x /usr/local/bin/brew ]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+fi
+
 # ── Ensure gum is available ──────────────────────────────
 if ! command -v gum &>/dev/null; then
-    echo "gum is required for the installer UI."
-    if command -v brew &>/dev/null; then
-        echo "Installing gum via Homebrew..."
-        brew install gum
-    else
-        echo "Install gum first: https://github.com/charmbracelet/gum#installation"
-        exit 1
-    fi
+    echo "Installing gum via Homebrew..."
+    brew install gum
 fi
 
 header() {
