@@ -19,7 +19,7 @@ Ezeket kézzel kell telepíteni a futtatás előtt:
 
 | Alkalmazás | Honnan |
 |---|---|
-| AWS VPN Client | https://aws.amazon.com/vpn/client-vpn-download/ |
+| AWS VPN Client | https://self-service.clientvpn.amazonaws.com/endpoints/cvpn-endpoint-022755a701a9c6b8c |
 | Tailscale | https://tailscale.com/download/mac |
 | WatchGuard Mobile VPN with SSL | IT osztály |
 

@@ -206,7 +206,7 @@ case "${1:-}" in
         ovpn_bin="/Applications/AWS VPN Client/AWS VPN Client.app/Contents/Resources/openvpn/acvc-openvpn"
         if [ ! -x "$ovpn_bin" ]; then
             err "AWS VPN Client not installed — install it first"
-            err "  https://aws.amazon.com/vpn/client-vpn-download/"
+            err "  https://self-service.clientvpn.amazonaws.com/endpoints/cvpn-endpoint-022755a701a9c6b8c"
             exit 1
         fi
         if sudo -n "$ovpn_bin" --version &>/dev/null; then

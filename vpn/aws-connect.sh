@@ -76,7 +76,7 @@ preflight_check() {
     # 1. AWS VPN Client app installed?
     if [ ! -x "$OVPN_BIN" ]; then
         err "AWS VPN Client not installed"
-        err "  Install from: https://aws.amazon.com/vpn/client-vpn-download/"
+        err "  Install from: https://self-service.clientvpn.amazonaws.com/endpoints/cvpn-endpoint-022755a701a9c6b8c"
         err "  Required: the bundled acvc-openvpn binary"
         failed=1
     fi

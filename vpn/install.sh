@@ -92,7 +92,7 @@ fi
 if [ -x "$OVPN_BIN" ]; then
     gum log --level info --prefix "✓" "AWS VPN Client: installed"
 else
-    warn_prereq "AWS VPN Client: not installed → https://aws.amazon.com/vpn/client-vpn-download/"
+    warn_prereq "AWS VPN Client: not installed → https://self-service.clientvpn.amazonaws.com/endpoints/cvpn-endpoint-022755a701a9c6b8c"
 fi
 
 # ── 7. Sudoers: auto-setup if AWS VPN Client present ────
