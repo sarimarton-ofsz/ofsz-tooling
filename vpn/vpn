@@ -1,0 +1,242 @@
+#!/usr/bin/env bash
+# vpn — unified VPN control for Tailscale, AWS VPN, WatchGuard
+# Usage: vpn <command> [args]
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || realpath "$0")")" && pwd)"
+source "$SCRIPT_DIR/lib.sh"
+
+usage() {
+    cat <<EOF
+Usage: vpn <command>
+
+Status:
+  status          Show status of all VPNs
+  check           Full network diagnostics
+  routes          Show VPN-related routes
+
+Individual VPN control:
+  ts-up           Connect Tailscale
+  ts-down         Disconnect Tailscale
+  aws-up          Connect AWS VPN
+  aws-down        Disconnect AWS VPN
+  wg-up           Connect WatchGuard
+  wg-down         Disconnect WatchGuard
+
+Presets (safe combinations):
+  preset aws-ts   AWS + Tailscale
+  preset all      All three (AWS + WatchGuard + Tailscale)
+
+Recovery:
+  kill-all        Disconnect all VPNs
+  recover         Kill all + reconnect default gateway
+
+Setup:
+  setup           Configure passwordless sudo for AWS VPN CLI
+  wg-set-password Store WatchGuard password in keychain
+EOF
+}
+
+cmd_status() {
+    echo "─── VPN Status ───────────────────────────"
+    printf "  %-14s %s\n" "Tailscale:" "$(ts_status)"
+    printf "  %-14s %s\n" "AWS VPN:" "$(aws_vpn_status)"
+    printf "  %-14s %s\n" "WatchGuard:" "$(wg_status)"
+    echo "───────────────────────────────────────────"
+}
+
+cmd_kill_all() {
+    warn "Disconnecting all VPNs..."
+    local failed=0
+    ts_down  || failed=1
+    aws_vpn_down || failed=1
+    wg_down  || failed=1
+    if [ $failed -eq 0 ]; then
+        ok "All VPNs disconnected"
+    else
+        err "Some VPNs failed to disconnect"
+    fi
+    return $failed
+}
+
+cmd_recover() {
+    warn "Recovery: killing all VPNs and restoring network..."
+    cmd_kill_all || true
+    sleep 2
+
+    # Flush route cache
+    log "Flushing route cache..."
+    route -n flush 2>/dev/null || true
+
+    # Check if default gateway is back
+    local gw
+    gw=$(netstat -rn -f inet 2>/dev/null | awk '/^default/{print $2; exit}')
+    if [ -n "$gw" ]; then
+        ok "Default gateway: $gw"
+    else
+        err "No default gateway found — may need manual intervention"
+        return 1
+    fi
+
+    net_check
+}
+
+cmd_preset() {
+    local preset="${1:-}"
+    case "$preset" in
+        aws-ts)
+            log "Preset: AWS + Tailscale (critical combo)"
+
+            # Force clean ordering: disconnect all, then reconnect in safe order.
+            ts_down  || true
+            wg_down  || true
+            aws_vpn_down || true
+            sleep 1
+
+            # Order matters: AWS first, then Tailscale
+            # AWS VPN tends to set aggressive default routes;
+            # Tailscale added after can coexist via its CGNAT range (100.x)
+            log "Phase 1: AWS VPN..."
+            aws_vpn_up || { err "AWS VPN failed — aborting preset"; return 1; }
+
+            log "Saving route state pre-Tailscale..."
+            route_snapshot
+
+            log "Phase 2: Tailscale..."
+            ts_up || { err "Tailscale failed — AWS VPN still up"; return 1; }
+
+            log "Post-connect route state:"
+            route_snapshot
+
+            # Verify both are still up
+            sleep 2
+            local ts_ok aws_ok
+            ts_ok=$(ts_status)
+            aws_ok=$(aws_vpn_status)
+            if [ "$ts_ok" = "connected" ] && [ "$aws_ok" = "connected" ]; then
+                ok "Preset aws-ts: both VPNs connected!"
+            else
+                err "Preset aws-ts: state mismatch — Tailscale=$ts_ok, AWS=$aws_ok"
+                warn "Route table for debugging:"
+                route_snapshot
+                return 1
+            fi
+
+            net_check
+            ;;
+        all)
+            log "Preset: All three (AWS + WatchGuard + Tailscale)"
+
+            # Order matters:
+            # 1. AWS first — sets aggressive routes (10.254.x gateway)
+            # 2. WatchGuard second — adds private subnet routes (10.x, 172.x, 192.168.x)
+            # 3. Tailscale last — uses CGNAT (100.x), most resilient, adapts to existing routes
+            # Each VPN uses its own utun interface; Tailscale's CGNAT range doesn't overlap.
+            #
+            # Force clean ordering: disconnect all first, then reconnect in safe order.
+            # Without this, a pre-existing Tailscale would stay up from before AWS,
+            # meaning it never saw AWS's routes — which can cause subtle routing issues.
+
+            log "Ensuring clean state..."
+            ts_down  || true
+            wg_down  || true
+            aws_vpn_down || true
+            sleep 1
+
+            log "Phase 1: AWS VPN..."
+            aws_vpn_up || { err "AWS VPN failed — aborting preset"; return 1; }
+
+            log "Phase 2: WatchGuard..."
+            wg_up || { err "WatchGuard failed — AWS VPN still up"; return 1; }
+
+            log "Saving route state pre-Tailscale..."
+            route_snapshot
+
+            log "Phase 3: Tailscale..."
+            ts_up || { err "Tailscale failed — AWS + WatchGuard still up"; return 1; }
+
+            log "Post-connect route state:"
+            route_snapshot
+
+            # Verify all three are still up
+            sleep 2
+            local ts_ok aws_ok wg_ok
+            ts_ok=$(ts_status)
+            aws_ok=$(aws_vpn_status)
+            wg_ok=$(wg_status)
+            if [ "$ts_ok" = "connected" ] && [ "$aws_ok" = "connected" ] && [ "$wg_ok" = "connected" ]; then
+                ok "Preset all: all three VPNs connected!"
+            else
+                err "Preset all: state mismatch — Tailscale=$ts_ok, AWS=$aws_ok, WatchGuard=$wg_ok"
+                warn "Route table for debugging:"
+                route_snapshot
+                return 1
+            fi
+
+            net_check
+            ;;
+        *)
+            err "Unknown preset: $preset"
+            echo "Available presets: aws-ts, all"
+            return 1
+            ;;
+    esac
+}
+
+# ── Main dispatch ───────────────────────────────────────────────────
+case "${1:-}" in
+    status)     cmd_status ;;
+    check)      net_check ;;
+    routes)     route_snapshot ;;
+    ts-up)      ts_up ;;
+    ts-down)    ts_down ;;
+    aws-up)     aws_vpn_up ;;
+    aws-down)   aws_vpn_down ;;
+    wg-up)      wg_up ;;
+    wg-down)    wg_down ;;
+    preset)     cmd_preset "${2:-}" ;;
+    kill-all)   cmd_kill_all ;;
+    recover)    cmd_recover ;;
+    wg-set-password)
+        echo -n "WatchGuard password: "
+        read -rs pw
+        echo
+        wg_store_password "$pw"
+        ;;
+    setup|setup-sudoers)
+        ovpn_bin="/Applications/AWS VPN Client/AWS VPN Client.app/Contents/Resources/openvpn/acvc-openvpn"
+        if [ ! -x "$ovpn_bin" ]; then
+            err "AWS VPN Client not installed — install it first"
+            err "  https://aws.amazon.com/vpn/client-vpn-download/"
+            exit 1
+        fi
+        if sudo -n "$ovpn_bin" --version &>/dev/null; then
+            ok "Passwordless sudo already configured — nothing to do"
+            exit 0
+        fi
+        # Sudoers needs backslash-escaped spaces in paths
+        ovpn_bin_escaped="${ovpn_bin// /\\ }"
+        sudoers_file="/etc/sudoers.d/vpn-aws"
+        echo "This will allow passwordless sudo for the AWS VPN openvpn binary."
+        echo ""
+        echo "  File: $sudoers_file"
+        echo "  Rules:"
+        echo "    $USER ALL=(ALL) NOPASSWD: $ovpn_bin_escaped *"
+        echo "    $USER ALL=(ALL) NOPASSWD: /bin/kill *"
+        echo ""
+        echo -n "Continue? [y/N] "
+        read -r confirm
+        if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+            printf '%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: /bin/kill *\n' \
+                "$USER" "$ovpn_bin_escaped" "$USER" | sudo tee "$sudoers_file" > /dev/null
+            sudo chmod 440 "$sudoers_file"
+            sudo visudo -cf "$sudoers_file" && ok "Done — vpn aws-up now works without password prompts" \
+                || { err "sudoers syntax error — removing broken file"; sudo rm -f "$sudoers_file"; }
+        fi
+        ;;
+    -h|--help|help|"") usage ;;
+    *)
+        err "Unknown command: $1"
+        usage
+        exit 1
+        ;;
+esac
