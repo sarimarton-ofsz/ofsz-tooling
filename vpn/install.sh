@@ -65,6 +65,8 @@ if [ -d "$SWIFTBAR_PLUGINS" ] && [ -f "$SWIFTBAR_SRC" ]; then
     # creates the link *inside* it instead of replacing it
     rm -rf "$SWIFTBAR_DEST"
     ln -sf "$SWIFTBAR_SRC" "$SWIFTBAR_DEST"
+    # Kick SwiftBar so the new plugin appears in the menu bar
+    open -g "swiftbar://refreshallplugins" 2>/dev/null || true
     gum log --level info --prefix "✓" "SwiftBar plugin symlinked"
 fi
 
