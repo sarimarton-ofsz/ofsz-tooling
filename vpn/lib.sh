@@ -61,6 +61,7 @@ ts_down() {
 # ── AWS VPN Client ──────────────────────────────────────────────────
 # Uses aws-connect.sh (CLI openvpn + SAML capture) instead of the GUI app.
 AWS_VPN_PID_FILE="$SCRIPT_DIR/run/openvpn.pid"
+AWS_VPN_RECONNECT_FLAG="$SCRIPT_DIR/run/aws-auto-reconnect"
 
 aws_vpn_status() {
     # Check CLI-based VPN (process runs as root — use ps, not kill -0)
@@ -91,13 +92,19 @@ end tell' 2>/dev/null 2>/dev/null) || { echo "disconnected"; return; }
 aws_vpn_up() {
     if [ "$(aws_vpn_status)" = "connected" ]; then
         ok "AWS VPN: already connected"
+        touch "$AWS_VPN_RECONNECT_FLAG"
         return 0
     fi
     log "AWS VPN: connecting via CLI (SAML)..."
-    "$SCRIPT_DIR/aws-connect.sh" up
+    if "$SCRIPT_DIR/aws-connect.sh" up; then
+        touch "$AWS_VPN_RECONNECT_FLAG"
+        return 0
+    fi
+    return 1
 }
 
 aws_vpn_down() {
+    rm -f "$AWS_VPN_RECONNECT_FLAG"
     if [ "$(aws_vpn_status)" = "disconnected" ]; then
         ok "AWS VPN: already disconnected"
         return 0

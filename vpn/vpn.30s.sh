@@ -74,21 +74,20 @@ ts=$(fast_ts_status)
 aws=$(fast_aws_status)
 wg=$(fast_wg_status)
 
+# ── AWS auto-reconnect (if dropped unexpectedly) ─────────
+RECONNECT_FLAG="$VPN_DIR/run/aws-auto-reconnect"
+if [[ "$aws" == "disconnected" ]] && [[ -f "$RECONNECT_FLAG" ]]; then
+    # Launch reconnect in background (lock file in aws-connect.sh prevents duplicates)
+    nohup bash -c '"$1" aws-up &>"$2"' _ "$VPN" "$VPN_DIR/run/reconnect.log" </dev/null &
+    aws="reconnecting"
+fi
+
 status_color() {
     case "$1" in
-        connected)            echo "#33CC33" ;;
-        disconnected|stopped) echo "#FF3B30" ;;
-        connecting)           echo "#E6B310" ;;
-        *)                    echo "#888888" ;;
-    esac
-}
-
-icon() {
-    case "$1" in
-        connected)            echo "🟢" ;;
-        disconnected|stopped) echo "🔴" ;;
-        connecting)           echo "🟡" ;;
-        *)                    echo "⚪" ;;
+        connected)              echo "#33CC33" ;;
+        disconnected|stopped)   echo "#FF3B30" ;;
+        connecting|reconnecting) echo "#E6B310" ;;
+        *)                      echo "#888888" ;;
     esac
 }
 
@@ -107,7 +106,7 @@ fi
 
 echo "---"
 
-# ── Status (with tooltips, badges, checked) ──────────────
+# ── VPN toggles (click to connect/disconnect) ─────────────
 
 ts_iface=$(netstat -rn -f inet 2>/dev/null | awk '/100\.64\/10.*utun/{print $NF}')
 aws_iface=$(grep -o 'utun[0-9]*' "$VPN_DIR/run/openvpn.log" 2>/dev/null | tail -1)
@@ -115,60 +114,38 @@ aws_iface=$(grep -o 'utun[0-9]*' "$VPN_DIR/run/openvpn.log" 2>/dev/null | tail -
 ts_tt=$(ts_detail)
 aws_tt=$(aws_detail)
 
-ts_extra=""
-[[ "$ts" == "connected" ]]  && ts_extra=" checked=true badge=$ts_iface"
-[[ -n "$ts_tt" ]]           && ts_extra="$ts_extra tooltip=$ts_tt"
-
+# AWS VPN
 aws_extra=""
-[[ "$aws" == "connected" ]] && aws_extra=" checked=true badge=$aws_iface"
-[[ -n "$aws_tt" ]]          && aws_extra="$aws_extra tooltip=$aws_tt"
-
-wg_extra=""
-[[ "$wg" == "connected" ]]  && wg_extra=" checked=true"
-
-echo "$(icon "$ts")  Tailscale — $ts | size=13 color=$(status_color "$ts")${ts_extra}"
-echo "$(icon "$aws")  AWS VPN — $aws | size=13 color=$(status_color "$aws")${aws_extra}"
-echo "$(icon "$wg")  WatchGuard — $wg | size=13 color=$(status_color "$wg")${wg_extra}"
-
-echo "---"
-
-# ── Presets (with shortcuts) ─────────────────────────────
-
-echo "Presets | sfimage=square.stack.3d.up size=13"
-echo "-- All Three | bash=$VPN param1=preset param2=all terminal=true refresh=true shortcut=CMD+OPT+1"
-echo "-- AWS + Tailscale | bash=$VPN param1=preset param2=aws-ts terminal=true refresh=true shortcut=CMD+OPT+2"
-
-echo "---"
-
-# ── Individual controls (with alternate for verbose mode) ─
-
-if [[ "$ts" == "connected" ]]; then
-    echo "Disconnect Tailscale | bash=$VPN param1=ts-down terminal=false refresh=true sfimage=arrow.down.circle color=#E65A26"
-    echo "Disconnect Tailscale (verbose) | bash=$VPN param1=ts-down terminal=true refresh=true sfimage=arrow.down.circle color=#E65A26 alternate=true"
-else
-    echo "Connect Tailscale | bash=$VPN param1=ts-up terminal=false refresh=true sfimage=arrow.up.circle color=#33CC33"
-    echo "Connect Tailscale (verbose) | bash=$VPN param1=ts-up terminal=true refresh=true sfimage=arrow.up.circle color=#33CC33 alternate=true"
-fi
-
+[[ -n "$aws_tt" ]] && aws_extra=" tooltip=$aws_tt"
 if [[ "$aws" == "connected" ]]; then
-    echo "Disconnect AWS VPN | bash=$VPN param1=aws-down terminal=false refresh=true sfimage=arrow.down.circle color=#E65A26"
-    echo "Disconnect AWS VPN (verbose) | bash=$VPN param1=aws-down terminal=true refresh=true sfimage=arrow.down.circle color=#E65A26 alternate=true"
+    echo "AWS VPN | size=13 color=$(status_color "$aws") checked=true badge=$aws_iface bash=$VPN param1=aws-down terminal=false refresh=true${aws_extra}"
+    echo "AWS VPN (verbose) | size=13 color=$(status_color "$aws") checked=true bash=$VPN param1=aws-down terminal=true refresh=true alternate=true"
 else
-    echo "Connect AWS VPN | bash=$VPN param1=aws-up terminal=true refresh=true sfimage=arrow.up.circle color=#33CC33"
+    echo "AWS VPN | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=false refresh=true"
 fi
 
+# WatchGuard
 if [[ "$wg" == "connected" ]]; then
-    echo "Disconnect WatchGuard | bash=$VPN param1=wg-down terminal=false refresh=true sfimage=arrow.down.circle color=#E65A26"
-    echo "Disconnect WatchGuard (verbose) | bash=$VPN param1=wg-down terminal=true refresh=true sfimage=arrow.down.circle color=#E65A26 alternate=true"
+    echo "WatchGuard | size=13 color=$(status_color "$wg") checked=true bash=$VPN param1=wg-down terminal=false refresh=true"
+    echo "WatchGuard (verbose) | size=13 color=$(status_color "$wg") checked=true bash=$VPN param1=wg-down terminal=true refresh=true alternate=true"
 else
-    echo "Connect WatchGuard | bash=$VPN param1=wg-up terminal=true refresh=true sfimage=arrow.up.circle color=#33CC33"
+    echo "WatchGuard | size=13 color=$(status_color "$wg") bash=$VPN param1=wg-up terminal=true refresh=true"
+fi
+
+# Tailscale
+ts_extra=""
+[[ -n "$ts_tt" ]] && ts_extra=" tooltip=$ts_tt"
+if [[ "$ts" == "connected" ]]; then
+    echo "Tailscale | size=13 color=$(status_color "$ts") checked=true badge=$ts_iface bash=$VPN param1=ts-down terminal=false refresh=true${ts_extra}"
+    echo "Tailscale (verbose) | size=13 color=$(status_color "$ts") checked=true bash=$VPN param1=ts-down terminal=true refresh=true alternate=true"
+else
+    echo "Tailscale | size=13 color=$(status_color "$ts") bash=$VPN param1=ts-up terminal=false refresh=true"
+    echo "Tailscale (verbose) | size=13 color=$(status_color "$ts") bash=$VPN param1=ts-up terminal=true refresh=true alternate=true"
 fi
 
 echo "---"
 
-# ── Utilities ────────────────────────────────────────────
-
-echo "Kill All | bash=$VPN param1=kill-all terminal=true refresh=true sfimage=xmark.shield color=#FF3B30"
-echo "Diagnostics | bash=$VPN param1=check terminal=true sfimage=stethoscope color=#888888"
+echo "Reconnect All | bash=$VPN param1=preset param2=all terminal=true refresh=true"
+echo "Kill All | bash=$VPN param1=kill-all terminal=true refresh=true color=#FF3B30"
 echo "---"
-echo "Refresh | refresh=true sfimage=arrow.clockwise"
+echo "Diagnostics | bash=$VPN param1=check terminal=true color=#888888"
