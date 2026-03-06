@@ -144,6 +144,38 @@ else
     fi
 fi
 
+# ── 11. VPN connection check ─────────────────────────────
+if [ $failed -eq 0 ]; then
+    gum style --bold --foreground 212 "VPN Connection Check"
+
+    TS_CLI="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+    ts_ok=false; aws_ok=false; wg_ok=false
+
+    "$TS_CLI" status &>/dev/null && ts_ok=true
+    { pid=$(cat "$TOOL_DIR/run/openvpn.pid" 2>/dev/null) && ps -p "$pid" &>/dev/null; } && aws_ok=true
+    $aws_ok || { pgrep -qf "acvc-openvpn" 2>/dev/null && aws_ok=true; }
+    pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null && {
+        wg_status=$(osascript -e '
+tell application "System Events"
+    tell process "WatchGuard Mobile VPN with SSL"
+        return name of menu item 1 of menu 1 of menu bar item 1 of menu bar 2
+    end tell
+end tell' 2>/dev/null) || true
+        [[ "$wg_status" == *"Connected"* ]] && wg_ok=true
+    }
+
+    all_ok=true
+    $ts_ok  && gum log --level info --prefix "✓" "Tailscale: connected" || { gum log --level warn "Tailscale: not connected"; all_ok=false; }
+    $aws_ok && gum log --level info --prefix "✓" "AWS VPN: connected"   || { gum log --level warn "AWS VPN: not connected"; all_ok=false; }
+    $wg_ok  && gum log --level info --prefix "✓" "WatchGuard: connected" || { gum log --level warn "WatchGuard: not connected"; all_ok=false; }
+
+    if ! $all_ok; then
+        echo ""
+        gum log --level warn "Not all VPNs are connected. Connect them manually, then run: vpn preset all"
+        failed=1
+    fi
+fi
+
 echo ""
 # shellcheck disable=SC2317
 return "$failed" 2>/dev/null || exit "$failed"
