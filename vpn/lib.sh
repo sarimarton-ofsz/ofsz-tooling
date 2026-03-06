@@ -95,10 +95,30 @@ aws_vpn_up() {
         touch "$AWS_VPN_RECONNECT_FLAG"
         return 0
     fi
+
+    # If Tailscale is up, disconnect it first — AWS VPN sets aggressive routes
+    # that conflict. Tailscale is restored after successful connect.
+    local ts_was_up=false
+    if [ "$(ts_status)" = "connected" ]; then
+        ts_was_up=true
+        log "Tailscale is up — disconnecting before AWS connect..."
+        ts_down || true
+    fi
+
     log "AWS VPN: connecting via CLI (SAML)..."
     if "$SCRIPT_DIR/aws-connect.sh" up; then
         touch "$AWS_VPN_RECONNECT_FLAG"
+        if $ts_was_up; then
+            log "Restoring Tailscale..."
+            ts_up || err "Tailscale restore failed after AWS connect"
+        fi
         return 0
+    fi
+
+    # AWS failed — restore Tailscale anyway
+    if $ts_was_up; then
+        log "AWS failed — restoring Tailscale..."
+        ts_up || true
     fi
     return 1
 }

@@ -78,6 +78,7 @@ wg=$(fast_wg_status)
 RECONNECT_FLAG="$VPN_DIR/run/aws-auto-reconnect"
 if [[ "$aws" == "disconnected" ]] && [[ -f "$RECONNECT_FLAG" ]]; then
     # Launch reconnect in background (lock file in aws-connect.sh prevents duplicates)
+    # aws-up handles Tailscale cycling automatically: ts-down → connect → ts-up
     nohup bash -c '"$1" aws-up &>"$2"' _ "$VPN" "$VPN_DIR/run/reconnect.log" </dev/null &
     aws="reconnecting"
 fi

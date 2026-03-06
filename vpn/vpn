@@ -17,7 +17,7 @@ Status:
 Individual VPN control:
   ts-up           Connect Tailscale
   ts-down         Disconnect Tailscale
-  aws-up          Connect AWS VPN
+  aws-up          Connect AWS VPN (cycles Tailscale if needed)
   aws-down        Disconnect AWS VPN
   wg-up           Connect WatchGuard
   wg-down         Disconnect WatchGuard
