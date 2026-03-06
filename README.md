@@ -4,6 +4,8 @@ VPN kezelő macOS-re — Tailscale, AWS VPN és WatchGuard egy helyről.
 
 - Mind a 3 VPN csatlakoztatása biztonságos sorrendben, egy kattintással
 - Az AWS VPN Client GUI-ra nincs többé szükség — nincs több AWS ikon a Dockban
+- AWS connect automatikusan kezeli a Tailscale-t: lekapcsolja előtte, visszakapcsolja utána (route konfliktus elkerülése)
+- A SAML böngésző háttérben nyílik — nem rabolja el a fókuszt az aktuális alkalmazástól
 
 ![VPN menüsáv](vpn-menu.png)
 
