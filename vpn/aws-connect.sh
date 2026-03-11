@@ -232,14 +232,16 @@ do_connect() {
         fi
         "$CHROME_BIN" --profile-directory="OFSZ-VPN" "$saml_url" &>/dev/null &
         SAML_BROWSER="chrome"
-        # Name the profile (Chrome creates it on first launch with default "Person N")
-        _chrome_prefs="$HOME/Library/Application Support/Google/Chrome/OFSZ-VPN/Preferences"
-        ( sleep 3; [ -f "$_chrome_prefs" ] && python3 -c "
+        # Name the profile in Local State (Chrome stores profile names there, not in Preferences)
+        _local_state="$HOME/Library/Application Support/Google/Chrome/Local State"
+        ( sleep 5; [ -f "$_local_state" ] && python3 -c "
 import json
-with open('$_chrome_prefs') as f: d=json.load(f)
-if d.get('profile',{}).get('name') != 'OFSZ VPN':
-    d.setdefault('profile',{})['name']='OFSZ VPN'
-    with open('$_chrome_prefs','w') as f: json.dump(d,f)
+p = '$_local_state'
+with open(p) as f: d = json.load(f)
+info = d.get('profile', {}).get('info_cache', {}).get('OFSZ-VPN', {})
+if info.get('name') != 'OFSZ VPN':
+    d.setdefault('profile', {}).setdefault('info_cache', {}).setdefault('OFSZ-VPN', {})['name'] = 'OFSZ VPN'
+    with open(p, 'w') as f: json.dump(d, f)
 " 2>/dev/null ) &
     else
         warn "Chrome not found, falling back to Safari (may need manual alert dismiss)"
