@@ -56,16 +56,10 @@ else
     gum log --level info --prefix "·" "WatchGuard password: already removed"
 fi
 
-# ── 5. Remove Chrome OFSZ-VPN profile ─────────────────
-CHROME_PROFILE="$HOME/Library/Application Support/Google/Chrome/OFSZ-VPN"
-if [ -d "$CHROME_PROFILE" ]; then
-    rm -rf "$CHROME_PROFILE"
-    gum log --level info --prefix "✓" "Chrome OFSZ-VPN profile removed"
-else
-    gum log --level info --prefix "·" "Chrome OFSZ-VPN profile: already removed"
-fi
+# ── 5. Kill isolated VPN Chrome + remove runtime dir ──
+pkill -f "user-data-dir=$TOOL_DIR/run/chrome-data" 2>/dev/null || true
 
-# ── 6. Remove runtime dir ───────────────────────────────
+# ── 6. Remove runtime dir (includes chrome-data) ─────
 if [ -d "$TOOL_DIR/run" ]; then
     rm -rf "$TOOL_DIR/run"
     gum log --level info --prefix "✓" "Runtime dir removed"

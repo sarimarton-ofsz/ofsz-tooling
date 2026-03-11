@@ -220,17 +220,14 @@ do_connect() {
     # Save frontmost app so we can restore focus after Chrome steals it
     local front_app
     front_app=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null) || true
-    # Open SAML URL in Chrome via AppleScript (most reliable on macOS).
-    # Direct binary calls and `open -a --args` fail in various scenarios
-    # (Chrome already running, curl|bash context, profile flags ignored).
+    # Isolated Chrome instance with --user-data-dir (separate from personal profile).
+    # open -na forces a new Chrome instance, so --user-data-dir is respected
+    # even when Chrome is already running. Entra SSO cookies persist across reconnects.
+    CHROME_VPN_DATA="$RUNTIME_DIR/chrome-data"
     if [ -d "/Applications/Google Chrome.app" ]; then
-        osascript <<CHROME_EOF 2>/dev/null
-tell application "Google Chrome"
-    activate
-    make new window
-    set URL of active tab of front window to "$saml_url"
-end tell
-CHROME_EOF
+        open -na "Google Chrome" --args --user-data-dir="$CHROME_VPN_DATA" "$saml_url"
+        sleep 1
+        CHROME_VPN_PID=$(pgrep -n -f "user-data-dir=$CHROME_VPN_DATA" 2>/dev/null) || true
         SAML_BROWSER="chrome"
     else
         warn "Chrome not found, falling back to Safari (may need manual alert dismiss)"
@@ -256,8 +253,12 @@ CHROME_EOF
     # Give the user a moment to interact with Chrome (e.g. "Save password" dialog)
     sleep 3
 
-    # Close the SAML browser tab
-    close_saml_tab
+    # Kill the isolated VPN Chrome instance (won't affect the user's main Chrome)
+    if [ -n "${CHROME_VPN_PID:-}" ]; then
+        kill "$CHROME_VPN_PID" 2>/dev/null || true
+    fi
+    # Fallback: kill any Chrome using our data dir
+    pkill -f "user-data-dir=$CHROME_VPN_DATA" 2>/dev/null || true
 
     if [ ! -s "$SAML_RESPONSE_FILE" ]; then
         err "SAML auth timeout (120s)"
