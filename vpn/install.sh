@@ -202,8 +202,13 @@ if [ $failed -eq 0 ]; then
     # This ensures the Entra SSO cookie is stored in our OFSZ-VPN profile
     # for future auto-reconnects. Even if already connected (e.g. via GUI),
     # we reconnect to seed the cookie in the right profile.
-    gum log --level info "AWS VPN: connecting via CLI (Entra ID login in Chrome)..."
-    gum log --level info "  → Chrome megnyílik az OFSZ-VPN profilban, jelentkezz be az Entra ID-val"
+    echo ""
+    gum style --bold --foreground 212 "AWS VPN — Entra ID bejelentkezés"
+    gum log --level info "Chrome megnyílik egy dedikált „OFSZ VPN" profillal."
+    gum log --level info "  → Ez egy új, üres Chrome profil (nem a személyes profil)"
+    gum log --level info "  → Az első indításnál Chrome EU-s keresőválasztót mutathat — ez normális"
+    gum log --level info "  → Jelentkezz be az Entra ID-val (céges Microsoft fiók)"
+    gum confirm "Tovább?" --default=yes --affirmative "Chrome megnyitása" --negative "Mégse" || { gum log --level warn "AWS VPN: skipped"; failed=1; }
     aws_vpn_down 2>/dev/null || true
     aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
 

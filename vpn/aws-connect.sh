@@ -230,7 +230,7 @@ do_connect() {
             osascript -e 'tell application "Google Chrome" to quit' 2>/dev/null || true
             sleep 2
         fi
-        "$CHROME_BIN" --profile-directory="OFSZ-VPN" "$saml_url" &
+        "$CHROME_BIN" --profile-directory="OFSZ-VPN" "$saml_url" &>/dev/null &
         SAML_BROWSER="chrome"
         # Name the profile (Chrome creates it on first launch with default "Person N")
         _chrome_prefs="$HOME/Library/Application Support/Google/Chrome/OFSZ-VPN/Preferences"
