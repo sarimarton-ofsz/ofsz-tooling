@@ -204,9 +204,12 @@ if [ $failed -eq 0 ]; then
     # we reconnect to seed the cookie in the right profile.
     echo ""
     gum style --bold --foreground 212 "AWS VPN — Entra ID bejelentkezés"
-    gum log --level info 'Chrome megnyílik egy dedikált "OFSZ VPN" profillal.'
-    gum log --level info "  Ez egy uj, ures Chrome profil (nem a szemelyes profil)"
-    gum log --level info "  Az elso inditasnal Chrome EU-s keresovalasztot mutathat - ez normalis"
+    CHROME_PROFILE_DIR="$HOME/Library/Application Support/Google/Chrome/OFSZ-VPN"
+    if [ ! -d "$CHROME_PROFILE_DIR" ]; then
+        gum log --level info 'Chrome megnyilik egy dedikalt "OFSZ VPN" profillal.'
+        gum log --level info "  Ez egy uj, ures Chrome profil (nem a szemelyes profil)"
+        gum log --level info "  Az elso inditasnal Chrome EU-s keresovalasztot mutathat - ez normalis"
+    fi
     gum log --level info "  Jelentkezz be az Entra ID-val (ceges Microsoft fiok)"
     if gum confirm "Tovabb?" --default=yes --affirmative "Chrome megnyitasa" --negative "Megse"; then
         aws_vpn_down 2>/dev/null || true
