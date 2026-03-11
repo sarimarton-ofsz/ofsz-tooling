@@ -13,6 +13,11 @@ if ! command -v gum &>/dev/null; then
     exit 1
 fi
 
+# Dependency tracker (shared with root uninstall.sh)
+DEPS_FILE="$(dirname "$TOOL_DIR")/.installed-deps"
+[ -f "$DEPS_FILE" ] || touch "$DEPS_FILE"
+_mark_dep() { grep -qx "$1" "$DEPS_FILE" 2>/dev/null || echo "$1" >> "$DEPS_FILE"; }
+
 failed=0
 warn_prereq() {
     gum log --level warn "$@"
@@ -90,6 +95,7 @@ SWIFTBAR_DEST="$SWIFTBAR_PLUGINS/vpn.30s.sh"
 if [ ! -d "/Applications/SwiftBar.app" ]; then
     gum log --level info "SwiftBar not found — installing..."
     brew install --cask swiftbar
+    _mark_dep swiftbar
     mkdir -p "$SWIFTBAR_PLUGINS"
     # Set plugin directory before first launch to skip the directory picker dialog
     defaults write com.ameba.SwiftBar PluginDirectory -string "$SWIFTBAR_PLUGINS"
@@ -130,6 +136,7 @@ if [ -d "/Applications/Google Chrome.app" ]; then
 else
     gum log --level info "Google Chrome not found — installing..."
     brew install --cask google-chrome
+    _mark_dep google-chrome
     gum log --level info --prefix "✓" "Google Chrome: installed"
 fi
 

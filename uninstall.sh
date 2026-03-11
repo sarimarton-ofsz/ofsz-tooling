@@ -101,26 +101,37 @@ if ! gum confirm "Minden modul eltávolítva. Repo törlése ($INSTALL_DIR)?" --
     exit 0
 fi
 
-# Brew packages — ask before deleting repo (gum still available)
-if brew list --cask swiftbar &>/dev/null; then
-    echo ""
-    if gum confirm "SwiftBar eltávolítása?" --default=no; then
-        brew uninstall --cask swiftbar 2>/dev/null || true
-        gum log --level info --prefix "✓" "SwiftBar eltávolítva"
-    fi
-fi
-
+# Remove brew dependencies we installed (tracked in .installed-deps)
+DEPS_FILE="$INSTALL_DIR/.installed-deps"
 remove_gum=false
-echo ""
-if gum confirm "gum eltávolítása?" --default=no; then
-    remove_gum=true
+if [ -f "$DEPS_FILE" ]; then
+    while IFS= read -r dep; do
+        [ -n "$dep" ] || continue
+        case "$dep" in
+            gum)
+                remove_gum=true ;;  # removed last — we still need it for prompts
+            swiftbar)
+                killall SwiftBar 2>/dev/null || true
+                brew uninstall --cask swiftbar 2>/dev/null || true
+                gum log --level info --prefix "✓" "SwiftBar eltávolítva"
+                ;;
+            google-chrome)
+                killall "Google Chrome" 2>/dev/null || true
+                brew uninstall --cask google-chrome 2>/dev/null || true
+                gum log --level info --prefix "✓" "Google Chrome eltávolítva"
+                ;;
+            *)
+                brew uninstall "$dep" 2>/dev/null || true
+                gum log --level info --prefix "✓" "$dep eltávolítva"
+                ;;
+        esac
+    done < "$DEPS_FILE"
 fi
 
 rm -rf "$INSTALL_DIR"
 echo ""
 echo "✓ $INSTALL_DIR törölve"
 
-# Remove gum last — after all gum prompts are done
 if $remove_gum; then
     brew uninstall gum 2>/dev/null || true
     echo "✓ gum eltávolítva"

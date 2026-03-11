@@ -24,9 +24,11 @@ if ! command -v brew &>/dev/null; then
 fi
 
 # ── Ensure gum is available ──────────────────────────────
+_we_installed_gum=false
 if ! command -v gum &>/dev/null; then
     echo "Installing gum via Homebrew..."
     brew install gum
+    _we_installed_gum=true
 fi
 
 header() {
@@ -91,6 +93,13 @@ else
     gum spin --spinner dot --title "Cloning repository..." -- \
         git clone "$REPO_URL" "$INSTALL_DIR"
     gum log --level info --prefix "✓" "Repository cloned to $INSTALL_DIR"
+fi
+
+# Record dependencies we installed (for clean uninstall)
+DEPS_FILE="$INSTALL_DIR/.installed-deps"
+[ -f "$DEPS_FILE" ] || touch "$DEPS_FILE"
+if $_we_installed_gum && ! grep -qx 'gum' "$DEPS_FILE" 2>/dev/null; then
+    echo "gum" >> "$DEPS_FILE"
 fi
 
 # ── Step 3: Status ───────────────────────────────────────
