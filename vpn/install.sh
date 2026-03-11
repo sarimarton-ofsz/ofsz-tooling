@@ -58,7 +58,10 @@ if [ ! -d "$SWIFTBAR_PLUGINS" ]; then
     gum log --level info "SwiftBar not found — installing..."
     brew install --cask swiftbar
     mkdir -p "$SWIFTBAR_PLUGINS"
+    # Set plugin directory before first launch to skip the directory picker dialog
+    defaults write com.ameba.SwiftBar PluginDirectory -string "$SWIFTBAR_PLUGINS"
     open -a SwiftBar
+    sleep 2
 fi
 
 if [ -d "$SWIFTBAR_PLUGINS" ] && [ -f "$SWIFTBAR_SRC" ]; then
