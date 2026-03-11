@@ -250,6 +250,9 @@ do_connect() {
     kill "$server_pid" 2>/dev/null || true
     wait "$server_pid" 2>/dev/null || true
 
+    # Give the user a moment to interact with Chrome (e.g. "Save password" dialog)
+    sleep 3
+
     # Close the SAML browser tab
     close_saml_tab
 
