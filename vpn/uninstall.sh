@@ -13,13 +13,15 @@ if ! command -v gum &>/dev/null; then
     exit 1
 fi
 
-# ── 0. Disconnect all VPNs ────────────────────────────
-export SCRIPT_DIR="$TOOL_DIR"
-source "$TOOL_DIR/lib.sh" 2>/dev/null || true
-aws_vpn_down 2>/dev/null && gum log --level info --prefix "✓" "AWS VPN disconnected" || true
-if [ "${WG_ENABLED:-false}" = "true" ]; then
-    wg_down 2>/dev/null && gum log --level info --prefix "✓" "WatchGuard disconnected" || true
+# ── 0. Stop VPN processes directly (no lib.sh — avoids sudo prompts)
+# AWS VPN daemon
+aws_pid=$(pgrep -f "acvc-openvpn.*aws-vpn-cli" 2>/dev/null | head -1) || true
+if [ -n "$aws_pid" ]; then
+    sudo kill "$aws_pid" 2>/dev/null || kill "$aws_pid" 2>/dev/null || true
+    gum log --level info --prefix "✓" "AWS VPN stopped"
 fi
+# SwiftBar (stop polling before we remove the symlink)
+killall SwiftBar 2>/dev/null && gum log --level info --prefix "✓" "SwiftBar stopped" || true
 
 # ── 1. Remove PATH from shell rc ────────────────────────
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
