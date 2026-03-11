@@ -191,11 +191,13 @@ if [ $failed -eq 0 ]; then
         ts_up || { gum log --level warn "Tailscale: failed"; failed=1; }
     fi
 
-    # AWS VPN — always connect via CLI with dedicated Chrome profile
+    # AWS VPN — always (re)connect via CLI with dedicated Chrome profile
     # This ensures the Entra SSO cookie is stored in our OFSZ-VPN profile
-    # for future auto-reconnects.
+    # for future auto-reconnects. Even if already connected (e.g. via GUI),
+    # we reconnect to seed the cookie in the right profile.
     gum log --level info "AWS VPN: connecting via CLI (Entra ID login in Chrome)..."
     gum log --level info "  → Chrome megnyílik az OFSZ-VPN profilban, jelentkezz be az Entra ID-val"
+    aws_vpn_down 2>/dev/null || true
     aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
 
     # WatchGuard
