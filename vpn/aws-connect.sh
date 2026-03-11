@@ -217,7 +217,12 @@ do_connect() {
     # Save frontmost app so we can restore focus after Chrome steals it
     local front_app
     front_app=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null) || true
-    if open -g -a "Google Chrome" "$saml_url" 2>/dev/null; then
+    # Use dedicated Chrome profile so the Entra SSO cookie persists
+    # across reconnects without polluting the user's personal profile.
+    # Note: open -g -a doesn't support --args, so we call the binary directly.
+    CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    if [ -x "$CHROME_BIN" ]; then
+        "$CHROME_BIN" --profile-directory="OFSZ-VPN" "$saml_url" &>/dev/null &
         SAML_BROWSER="chrome"
     else
         warn "Chrome not found, falling back to Safari (may need manual alert dismiss)"

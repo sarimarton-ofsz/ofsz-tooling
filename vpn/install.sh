@@ -94,6 +94,15 @@ else
     warn_prereq "Tailscale: not installed → https://tailscale.com/download/mac"
 fi
 
+# ── 5b. Google Chrome ──────────────────────────────────
+if [ -d "/Applications/Google Chrome.app" ]; then
+    gum log --level info --prefix "✓" "Google Chrome: installed"
+else
+    gum log --level info "Google Chrome not found — installing..."
+    brew install --cask google-chrome
+    gum log --level info --prefix "✓" "Google Chrome: installed"
+fi
+
 # ── 6. AWS VPN Client ────────────────────────────────────
 if [ -x "$OVPN_BIN" ]; then
     gum log --level info --prefix "✓" "AWS VPN Client: installed"
@@ -166,39 +175,37 @@ if ! $SKIP_WG; then
     fi
 fi
 
-# ── 11. VPN connection check ─────────────────────────────
+# ── 11. VPN connect ──────────────────────────────────────
 if [ $failed -eq 0 ]; then
-    gum style --bold --foreground 212 "VPN Connection Check"
+    echo ""
+    gum style --bold --foreground 212 "VPN Connect"
 
-    TS_CLI="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
-    ts_ok=false; aws_ok=false; wg_ok=false
+    # Source lib.sh for vpn functions
+    SCRIPT_DIR="$TOOL_DIR" source "$TOOL_DIR/lib.sh"
 
-    "$TS_CLI" status &>/dev/null && ts_ok=true
-    { pid=$(cat "$TOOL_DIR/run/openvpn.pid" 2>/dev/null) && ps -p "$pid" &>/dev/null; } && aws_ok=true
-    $aws_ok || { pgrep -qf "acvc-openvpn" 2>/dev/null && aws_ok=true; }
-    if ! $SKIP_WG; then
-        pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null && {
-            wg_status=$(osascript -e '
-tell application "System Events"
-    tell process "WatchGuard Mobile VPN with SSL"
-        return name of menu item 1 of menu 1 of menu bar item 1 of menu bar 2
-    end tell
-end tell' 2>/dev/null) || true
-            [[ "$wg_status" == *"Connected"* ]] && wg_ok=true
-        }
+    # Tailscale
+    if [ "$(ts_status)" = "connected" ]; then
+        gum log --level info --prefix "✓" "Tailscale: already connected"
+    else
+        gum log --level info "Tailscale: connecting..."
+        ts_up || { gum log --level warn "Tailscale: failed"; failed=1; }
     fi
 
-    all_ok=true
-    $ts_ok  && gum log --level info --prefix "✓" "Tailscale: connected" || { gum log --level warn "Tailscale: not connected"; all_ok=false; }
-    $aws_ok && gum log --level info --prefix "✓" "AWS VPN: connected"   || { gum log --level warn "AWS VPN: not connected"; all_ok=false; }
-    if ! $SKIP_WG; then
-        $wg_ok  && gum log --level info --prefix "✓" "WatchGuard: connected" || { gum log --level warn "WatchGuard: not connected"; all_ok=false; }
-    fi
+    # AWS VPN — always connect via CLI with dedicated Chrome profile
+    # This ensures the Entra SSO cookie is stored in our OFSZ-VPN profile
+    # for future auto-reconnects.
+    gum log --level info "AWS VPN: connecting via CLI (Entra ID login in Chrome)..."
+    gum log --level info "  → Chrome megnyílik az OFSZ-VPN profilban, jelentkezz be az Entra ID-val"
+    aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
 
-    if ! $all_ok; then
-        echo ""
-        gum log --level warn "Not all VPNs are connected. Connect them manually, then run: vpn preset all"
-        failed=1
+    # WatchGuard
+    if ! $SKIP_WG; then
+        if [ "$(wg_status)" = "connected" ]; then
+            gum log --level info --prefix "✓" "WatchGuard: already connected"
+        else
+            gum log --level info "WatchGuard: connecting..."
+            wg_up || { gum log --level warn "WatchGuard: failed"; failed=1; }
+        fi
     fi
 fi
 
