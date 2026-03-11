@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # OFSZ Tooling — meta-installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/main/setup.sh | bash
+#
+# The { ... } block ensures bash reads the entire script before executing,
+# preventing brew/curl output from interleaving with the script when piped.
+{
 set -euo pipefail
 
 REPO_URL="https://github.com/sarimarton-ofsz/ofsz-tooling.git"
@@ -189,3 +193,4 @@ else
         "Fix warnings above, then re-run the installer."
 fi
 echo ""
+}
