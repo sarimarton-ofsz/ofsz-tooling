@@ -203,6 +203,9 @@ do_connect() {
 
     rm -f "$SAML_RESPONSE_FILE"
 
+    # Kill any leftover SAML server from a previous run
+    lsof -ti :35001 2>/dev/null | xargs kill 2>/dev/null || true
+
     # Start SAML capture server (user-level, port 35001)
     log "Starting SAML capture server on :35001..."
     SAML_RESPONSE_FILE="$SAML_RESPONSE_FILE" \
@@ -219,8 +222,11 @@ do_connect() {
     front_app=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null) || true
     # Use dedicated Chrome profile so the Entra SSO cookie persists
     # across reconnects without polluting the user's personal profile.
-    if [ -d "/Applications/Google Chrome.app" ]; then
-        open -a "Google Chrome" --args --profile-directory="OFSZ-VPN" "$saml_url"
+    # open -a --args doesn't pass args to already-running Chrome;
+    # direct binary call reliably works in both cases (launches or IPC).
+    CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    if [ -x "$CHROME_BIN" ]; then
+        "$CHROME_BIN" --profile-directory="OFSZ-VPN" "$saml_url" &
         SAML_BROWSER="chrome"
         # Name the profile (Chrome creates it on first launch with default "Person N")
         _chrome_prefs="$HOME/Library/Application Support/Google/Chrome/OFSZ-VPN/Preferences"
