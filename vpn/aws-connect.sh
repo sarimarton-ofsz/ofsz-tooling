@@ -232,17 +232,7 @@ do_connect() {
         fi
         "$CHROME_BIN" --profile-directory="OFSZ-VPN" "$saml_url" &>/dev/null &
         SAML_BROWSER="chrome"
-        # Name the profile in Local State (Chrome stores profile names there, not in Preferences)
-        _local_state="$HOME/Library/Application Support/Google/Chrome/Local State"
-        ( sleep 5; [ -f "$_local_state" ] && python3 -c "
-import json
-p = '$_local_state'
-with open(p) as f: d = json.load(f)
-info = d.get('profile', {}).get('info_cache', {}).get('OFSZ-VPN', {})
-if info.get('name') != 'OFSZ VPN':
-    d.setdefault('profile', {}).setdefault('info_cache', {}).setdefault('OFSZ-VPN', {})['name'] = 'OFSZ VPN'
-    with open(p, 'w') as f: json.dump(d, f)
-" 2>/dev/null ) &
+        # Profile rename happens after SAML capture when Chrome is quit
     else
         warn "Chrome not found, falling back to Safari (may need manual alert dismiss)"
         open -g "$saml_url"
@@ -272,8 +262,21 @@ if info.get('name') != 'OFSZ VPN':
     # Give the user a moment to interact with Chrome (e.g. "Save password" dialog)
     sleep 3
 
-    # Close the SAML browser tab
+    # Close the SAML browser tab, then quit Chrome so we can rename the profile
     close_saml_tab
+    osascript -e 'tell application "Google Chrome" to quit' 2>/dev/null || true
+    sleep 1
+    # Rename OFSZ-VPN profile (must happen after Chrome exits — it overwrites Local State on quit)
+    local _local_state="$HOME/Library/Application Support/Google/Chrome/Local State"
+    [ -f "$_local_state" ] && python3 -c "
+import json
+p = '$_local_state'
+with open(p) as f: d = json.load(f)
+ic = d.get('profile', {}).get('info_cache', {}).get('OFSZ-VPN')
+if ic and ic.get('name') != 'OFSZ VPN':
+    ic['name'] = 'OFSZ VPN'
+    with open(p, 'w') as f: json.dump(d, f)
+" 2>/dev/null || true
 
     if [ ! -s "$SAML_RESPONSE_FILE" ]; then
         err "SAML auth timeout (120s)"
