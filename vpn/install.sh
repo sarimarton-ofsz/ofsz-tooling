@@ -140,6 +140,24 @@ else
     gum log --level info --prefix "✓" "Google Chrome: installed"
 fi
 
+# ── 7b. Chrome OFSZ-VPN profile name ─────────────────────
+CHROME_PROFILE_DIR="$HOME/Library/Application Support/Google/Chrome/OFSZ-VPN"
+CHROME_PREFS="$CHROME_PROFILE_DIR/Preferences"
+if [ -d "/Applications/Google Chrome.app" ]; then
+    mkdir -p "$CHROME_PROFILE_DIR"
+    if [ ! -f "$CHROME_PREFS" ]; then
+        echo '{"profile":{"name":"OFSZ VPN"}}' > "$CHROME_PREFS"
+    elif ! python3 -c "import json; d=json.load(open('$CHROME_PREFS')); assert d.get('profile',{}).get('name')=='OFSZ VPN'" 2>/dev/null; then
+        python3 -c "
+import json
+with open('$CHROME_PREFS') as f: d=json.load(f)
+d.setdefault('profile',{})['name']='OFSZ VPN'
+with open('$CHROME_PREFS','w') as f: json.dump(d,f)
+"
+    fi
+    gum log --level info --prefix "✓" "Chrome OFSZ-VPN profile: named"
+fi
+
 # ── 8. AWS VPN Client ────────────────────────────────────
 if [ -x "$OVPN_BIN" ]; then
     gum log --level info --prefix "✓" "AWS VPN Client: installed"
