@@ -222,10 +222,15 @@ do_connect() {
     front_app=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null) || true
     # Use dedicated Chrome profile so the Entra SSO cookie persists
     # across reconnects without polluting the user's personal profile.
-    # -n forces a new instance → macOS doesn't delegate to running Chrome,
-    # so --profile-directory is respected. Chrome merges into the right profile.
-    if [ -d "/Applications/Google Chrome.app" ]; then
-        open -na "Google Chrome" --args --profile-directory="OFSZ-VPN" "$saml_url"
+    CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    if [ -x "$CHROME_BIN" ]; then
+        # Kill Chrome first so --profile-directory is respected on fresh launch
+        if pgrep -x "Google Chrome" &>/dev/null; then
+            log "Closing Chrome to relaunch with OFSZ-VPN profile..."
+            osascript -e 'tell application "Google Chrome" to quit' 2>/dev/null || true
+            sleep 2
+        fi
+        "$CHROME_BIN" --profile-directory="OFSZ-VPN" "$saml_url" &
         SAML_BROWSER="chrome"
         # Name the profile (Chrome creates it on first launch with default "Person N")
         _chrome_prefs="$HOME/Library/Application Support/Google/Chrome/OFSZ-VPN/Preferences"
