@@ -37,11 +37,9 @@ for uninstaller in "$INSTALL_DIR"/*/uninstall.sh; do
 done
 
 if [ ${#mod_dirs[@]} -eq 0 ]; then
-    gum log --level info "Nincs telepített modul"
-    if gum confirm "Repo törlése ($INSTALL_DIR)?" --default=yes; then
-        rm -rf "$INSTALL_DIR"
-        echo "✓ Törölve."
-    fi
+    gum log --level info "Nincs telepített modul — repo törlése..."
+    rm -rf "$INSTALL_DIR"
+    echo "✓ Törölve."
     exit 0
 fi
 
@@ -88,15 +86,6 @@ if [ "$removed" -lt "$total" ]; then
         "✓ Kiválasztott modulok eltávolítva" \
         "" \
         "Repo megmaradt: $INSTALL_DIR"
-    echo ""
-    exit 0
-fi
-
-echo ""
-if ! gum confirm "Minden modul eltávolítva. Repo törlése ($INSTALL_DIR)?" --default=yes; then
-    echo ""
-    gum style --border double --border-foreground 76 --padding "0 2" --bold \
-        "✓ Modulok eltávolítva — repo megmaradt"
     echo ""
     exit 0
 fi
