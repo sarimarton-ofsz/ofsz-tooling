@@ -50,7 +50,40 @@ else
     gum log --level warn "Could not detect shell rc — add manually: $PATH_LINE"
 fi
 
-# ── 3. SwiftBar: auto-install + symlink ──────────────────
+# ── 3. WatchGuard (skippable) ────────────────────────────
+# Asked early so the config file exists before SwiftBar starts polling.
+SKIP_WG=false
+if ! gum confirm "WatchGuard VPN beállítása?" --default=yes; then
+    SKIP_WG=true
+    gum log --level info --prefix "–" "WatchGuard: skipped"
+fi
+
+echo "WG_ENABLED=$( $SKIP_WG && echo false || echo true )" > "$TOOL_DIR/config"
+
+if ! $SKIP_WG; then
+    if pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
+        gum log --level info --prefix "✓" "WatchGuard: running"
+    else
+        warn_prereq "WatchGuard: not running → contact IT for installation"
+    fi
+
+    # WatchGuard password: prompt if missing
+    if security find-generic-password -s "vpn-watchguard" -w &>/dev/null; then
+        gum log --level info --prefix "✓" "WatchGuard password: in keychain"
+    else
+        pw=$(gum input --password --placeholder "WatchGuard jelszó" --header "Enter your WatchGuard VPN password:")
+        if [ -n "$pw" ]; then
+            security delete-generic-password -s "vpn-watchguard" 2>/dev/null || true
+            security add-generic-password -s "vpn-watchguard" -a "watchguard" -w "$pw" -T ""
+            gum log --level info --prefix "✓" "WatchGuard password: stored in keychain"
+        else
+            warn_prereq "WatchGuard password: not stored (empty input)"
+        fi
+    fi
+fi
+
+# ── 4. SwiftBar: auto-install + symlink ──────────────────
+# Placed after config write so SwiftBar reads WG_ENABLED correctly on first poll.
 SWIFTBAR_SRC="$TOOL_DIR/vpn.30s.sh"
 SWIFTBAR_DEST="$SWIFTBAR_PLUGINS/vpn.30s.sh"
 
@@ -67,11 +100,8 @@ elif [ ! -d "$SWIFTBAR_PLUGINS" ]; then
 fi
 
 if [ -d "$SWIFTBAR_PLUGINS" ] && [ -f "$SWIFTBAR_SRC" ]; then
-    # Remove stale target first — ln -sf into an existing directory
-    # creates the link *inside* it instead of replacing it
     rm -rf "$SWIFTBAR_DEST"
     ln -sf "$SWIFTBAR_SRC" "$SWIFTBAR_DEST"
-    # Kick SwiftBar so the new plugin appears in the menu bar
     open -g "swiftbar://refreshallplugins" 2>/dev/null || true
     gum log --level info --prefix "✓" "SwiftBar plugin symlinked"
 fi
@@ -80,21 +110,21 @@ fi
 echo ""
 gum style --bold --foreground 212 "Prerequisites"
 
-# ── 4. Python 3 ──────────────────────────────────────────
+# ── 5. Python 3 ──────────────────────────────────────────
 if command -v python3 &>/dev/null; then
     gum log --level info --prefix "✓" "Python 3: $(python3 --version 2>&1)"
 else
     warn_prereq "Python 3: not found → run: xcode-select --install"
 fi
 
-# ── 5. Tailscale ─────────────────────────────────────────
+# ── 6. Tailscale ─────────────────────────────────────────
 if [ -x "/Applications/Tailscale.app/Contents/MacOS/Tailscale" ]; then
     gum log --level info --prefix "✓" "Tailscale: installed"
 else
     warn_prereq "Tailscale: not installed → https://tailscale.com/download/mac"
 fi
 
-# ── 5b. Google Chrome ──────────────────────────────────
+# ── 7. Google Chrome ─────────────────────────────────────
 if [ -d "/Applications/Google Chrome.app" ]; then
     gum log --level info --prefix "✓" "Google Chrome: installed"
 else
@@ -103,7 +133,7 @@ else
     gum log --level info --prefix "✓" "Google Chrome: installed"
 fi
 
-# ── 6. AWS VPN Client ────────────────────────────────────
+# ── 8. AWS VPN Client ────────────────────────────────────
 if [ -x "$OVPN_BIN" ]; then
     gum log --level info --prefix "✓" "AWS VPN Client: installed"
     # Quit GUI — CLI manages the connection; GUI fights over tun device
@@ -115,7 +145,7 @@ else
     warn_prereq "AWS VPN Client: not installed → https://self-service.clientvpn.amazonaws.com/endpoints/cvpn-endpoint-022755a701a9c6b8c"
 fi
 
-# ── 7. Sudoers: auto-setup if AWS VPN Client present ────
+# ── 9. Sudoers: auto-setup if AWS VPN Client present ────
 if [ -x "$OVPN_BIN" ]; then
     if sudo -n "$OVPN_BIN" --version &>/dev/null; then
         gum log --level info --prefix "✓" "AWS VPN sudoers: configured"
@@ -136,43 +166,11 @@ if [ -x "$OVPN_BIN" ]; then
     fi
 fi
 
-# ── 8. AWS VPN profile ──────────────────────────────────
+# ── 10. AWS VPN profile ──────────────────────────────────
 if [ -f "$HOME/.config/AWSVPNClient/ConnectionProfiles" ]; then
     gum log --level info --prefix "✓" "AWS VPN profile: found"
 else
     warn_prereq "AWS VPN profile: not configured → connect once via AWS VPN Client GUI"
-fi
-
-# ── 9. WatchGuard (skippable) ───────────────────────────
-SKIP_WG=false
-if ! gum confirm "WatchGuard VPN beállítása?" --default=yes; then
-    SKIP_WG=true
-    gum log --level info --prefix "–" "WatchGuard: skipped"
-fi
-
-# Write config
-echo "WG_ENABLED=$( $SKIP_WG && echo false || echo true )" > "$TOOL_DIR/config"
-
-if ! $SKIP_WG; then
-    if pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
-        gum log --level info --prefix "✓" "WatchGuard: running"
-    else
-        warn_prereq "WatchGuard: not running → contact IT for installation"
-    fi
-
-    # ── 10. WatchGuard password: prompt if missing ───────────
-    if security find-generic-password -s "vpn-watchguard" -w &>/dev/null; then
-        gum log --level info --prefix "✓" "WatchGuard password: in keychain"
-    else
-        pw=$(gum input --password --placeholder "WatchGuard jelszó" --header "Enter your WatchGuard VPN password:")
-        if [ -n "$pw" ]; then
-            security delete-generic-password -s "vpn-watchguard" 2>/dev/null || true
-            security add-generic-password -s "vpn-watchguard" -a "watchguard" -w "$pw" -T ""
-            gum log --level info --prefix "✓" "WatchGuard password: stored in keychain"
-        else
-            warn_prereq "WatchGuard password: not stored (empty input)"
-        fi
-    fi
 fi
 
 # ── 11. VPN connect ──────────────────────────────────────
