@@ -54,7 +54,7 @@ fi
 SWIFTBAR_SRC="$TOOL_DIR/vpn.30s.sh"
 SWIFTBAR_DEST="$SWIFTBAR_PLUGINS/vpn.30s.sh"
 
-if [ ! -d "$SWIFTBAR_PLUGINS" ]; then
+if [ ! -d "/Applications/SwiftBar.app" ]; then
     gum log --level info "SwiftBar not found — installing..."
     brew install --cask swiftbar
     mkdir -p "$SWIFTBAR_PLUGINS"
@@ -62,6 +62,8 @@ if [ ! -d "$SWIFTBAR_PLUGINS" ]; then
     defaults write com.ameba.SwiftBar PluginDirectory -string "$SWIFTBAR_PLUGINS"
     open -a SwiftBar
     sleep 2
+elif [ ! -d "$SWIFTBAR_PLUGINS" ]; then
+    mkdir -p "$SWIFTBAR_PLUGINS"
 fi
 
 if [ -d "$SWIFTBAR_PLUGINS" ] && [ -f "$SWIFTBAR_SRC" ]; then
