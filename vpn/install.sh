@@ -123,24 +123,35 @@ else
     warn_prereq "AWS VPN profile: not configured → connect once via AWS VPN Client GUI"
 fi
 
-# ── 9. WatchGuard app ───────────────────────────────────
-if pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
-    gum log --level info --prefix "✓" "WatchGuard: running"
-else
-    warn_prereq "WatchGuard: not running → contact IT for installation"
+# ── 9. WatchGuard (skippable) ───────────────────────────
+SKIP_WG=false
+if ! gum confirm "WatchGuard VPN beállítása?" --default=yes; then
+    SKIP_WG=true
+    gum log --level info --prefix "–" "WatchGuard: skipped"
 fi
 
-# ── 10. WatchGuard password: prompt if missing ───────────
-if security find-generic-password -s "vpn-watchguard" -w &>/dev/null; then
-    gum log --level info --prefix "✓" "WatchGuard password: in keychain"
-else
-    pw=$(gum input --password --placeholder "WatchGuard jelszó" --header "Enter your WatchGuard VPN password:")
-    if [ -n "$pw" ]; then
-        security delete-generic-password -s "vpn-watchguard" 2>/dev/null || true
-        security add-generic-password -s "vpn-watchguard" -a "watchguard" -w "$pw" -T ""
-        gum log --level info --prefix "✓" "WatchGuard password: stored in keychain"
+# Write config
+echo "WG_ENABLED=$( $SKIP_WG && echo false || echo true )" > "$TOOL_DIR/config"
+
+if ! $SKIP_WG; then
+    if pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
+        gum log --level info --prefix "✓" "WatchGuard: running"
     else
-        warn_prereq "WatchGuard password: not stored (empty input)"
+        warn_prereq "WatchGuard: not running → contact IT for installation"
+    fi
+
+    # ── 10. WatchGuard password: prompt if missing ───────────
+    if security find-generic-password -s "vpn-watchguard" -w &>/dev/null; then
+        gum log --level info --prefix "✓" "WatchGuard password: in keychain"
+    else
+        pw=$(gum input --password --placeholder "WatchGuard jelszó" --header "Enter your WatchGuard VPN password:")
+        if [ -n "$pw" ]; then
+            security delete-generic-password -s "vpn-watchguard" 2>/dev/null || true
+            security add-generic-password -s "vpn-watchguard" -a "watchguard" -w "$pw" -T ""
+            gum log --level info --prefix "✓" "WatchGuard password: stored in keychain"
+        else
+            warn_prereq "WatchGuard password: not stored (empty input)"
+        fi
     fi
 fi
 
@@ -154,20 +165,24 @@ if [ $failed -eq 0 ]; then
     "$TS_CLI" status &>/dev/null && ts_ok=true
     { pid=$(cat "$TOOL_DIR/run/openvpn.pid" 2>/dev/null) && ps -p "$pid" &>/dev/null; } && aws_ok=true
     $aws_ok || { pgrep -qf "acvc-openvpn" 2>/dev/null && aws_ok=true; }
-    pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null && {
-        wg_status=$(osascript -e '
+    if ! $SKIP_WG; then
+        pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null && {
+            wg_status=$(osascript -e '
 tell application "System Events"
     tell process "WatchGuard Mobile VPN with SSL"
         return name of menu item 1 of menu 1 of menu bar item 1 of menu bar 2
     end tell
 end tell' 2>/dev/null) || true
-        [[ "$wg_status" == *"Connected"* ]] && wg_ok=true
-    }
+            [[ "$wg_status" == *"Connected"* ]] && wg_ok=true
+        }
+    fi
 
     all_ok=true
     $ts_ok  && gum log --level info --prefix "✓" "Tailscale: connected" || { gum log --level warn "Tailscale: not connected"; all_ok=false; }
     $aws_ok && gum log --level info --prefix "✓" "AWS VPN: connected"   || { gum log --level warn "AWS VPN: not connected"; all_ok=false; }
-    $wg_ok  && gum log --level info --prefix "✓" "WatchGuard: connected" || { gum log --level warn "WatchGuard: not connected"; all_ok=false; }
+    if ! $SKIP_WG; then
+        $wg_ok  && gum log --level info --prefix "✓" "WatchGuard: connected" || { gum log --level warn "WatchGuard: not connected"; all_ok=false; }
+    fi
 
     if ! $all_ok; then
         echo ""

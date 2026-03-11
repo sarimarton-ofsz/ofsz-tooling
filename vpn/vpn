@@ -19,12 +19,22 @@ Individual VPN control:
   ts-down         Disconnect Tailscale
   aws-up          Connect AWS VPN (cycles Tailscale if needed)
   aws-down        Disconnect AWS VPN
+EOF
+    if [[ "$WG_ENABLED" == "true" ]]; then
+        cat <<EOF
   wg-up           Connect WatchGuard
   wg-down         Disconnect WatchGuard
+EOF
+    fi
+    cat <<EOF
 
 Presets (safe combinations):
   preset aws-ts   AWS + Tailscale
-  preset all      All three (AWS + WatchGuard + Tailscale)
+EOF
+    if [[ "$WG_ENABLED" == "true" ]]; then
+        echo "  preset all      All three (AWS + WatchGuard + Tailscale)"
+    fi
+    cat <<EOF
 
 Recovery:
   kill-all        Disconnect all VPNs
@@ -32,15 +42,17 @@ Recovery:
 
 Setup:
   setup           Configure passwordless sudo for AWS VPN CLI
-  wg-set-password Store WatchGuard password in keychain
 EOF
+    if [[ "$WG_ENABLED" == "true" ]]; then
+        echo "  wg-set-password Store WatchGuard password in keychain"
+    fi
 }
 
 cmd_status() {
     echo "─── VPN Status ───────────────────────────"
     printf "  %-14s %s\n" "Tailscale:" "$(ts_status)"
     printf "  %-14s %s\n" "AWS VPN:" "$(aws_vpn_status)"
-    printf "  %-14s %s\n" "WatchGuard:" "$(wg_status)"
+    [[ "$WG_ENABLED" == "true" ]] && printf "  %-14s %s\n" "WatchGuard:" "$(wg_status)"
     echo "───────────────────────────────────────────"
 }
 
@@ -50,7 +62,7 @@ cmd_kill_all() {
     local failed=0
     ts_down  || failed=1
     aws_vpn_down || failed=1
-    wg_down  || failed=1
+    [[ "$WG_ENABLED" == "true" ]] && { wg_down || failed=1; }
     if [ $failed -eq 0 ]; then
         ok "All VPNs disconnected"
     else
@@ -89,7 +101,7 @@ cmd_preset() {
 
             # Force clean ordering: disconnect all, then reconnect in safe order.
             ts_down  || true
-            wg_down  || true
+            [[ "$WG_ENABLED" == "true" ]] && { wg_down || true; }
             aws_vpn_down || true
             sleep 1
 
@@ -125,52 +137,59 @@ cmd_preset() {
             net_check
             ;;
         all)
-            log "Preset: All three (AWS + WatchGuard + Tailscale)"
-
-            # Order matters:
-            # 1. AWS first — sets aggressive routes (10.254.x gateway)
-            # 2. WatchGuard second — adds private subnet routes (10.x, 172.x, 192.168.x)
-            # 3. Tailscale last — uses CGNAT (100.x), most resilient, adapts to existing routes
-            # Each VPN uses its own utun interface; Tailscale's CGNAT range doesn't overlap.
-            #
-            # Force clean ordering: disconnect all first, then reconnect in safe order.
-            # Without this, a pre-existing Tailscale would stay up from before AWS,
-            # meaning it never saw AWS's routes — which can cause subtle routing issues.
+            if [[ "$WG_ENABLED" == "true" ]]; then
+                log "Preset: All three (AWS + WatchGuard + Tailscale)"
+            else
+                log "Preset: AWS + Tailscale"
+            fi
 
             log "Ensuring clean state..."
             ts_down  || true
-            wg_down  || true
+            [[ "$WG_ENABLED" == "true" ]] && { wg_down || true; }
             aws_vpn_down || true
             sleep 1
 
             log "Phase 1: AWS VPN..."
             aws_vpn_up || { err "AWS VPN failed — aborting preset"; return 1; }
 
-            log "Phase 2: WatchGuard..."
-            wg_up || { err "WatchGuard failed — AWS VPN still up"; return 1; }
+            if [[ "$WG_ENABLED" == "true" ]]; then
+                log "Phase 2: WatchGuard..."
+                wg_up || { err "WatchGuard failed — AWS VPN still up"; return 1; }
+            fi
 
             log "Saving route state pre-Tailscale..."
             route_snapshot
 
-            log "Phase 3: Tailscale..."
-            ts_up || { err "Tailscale failed — AWS + WatchGuard still up"; return 1; }
+            log "Phase $( [[ "$WG_ENABLED" == "true" ]] && echo 3 || echo 2 ): Tailscale..."
+            ts_up || { err "Tailscale failed"; return 1; }
 
             log "Post-connect route state:"
             route_snapshot
 
-            # Verify all three are still up
             sleep 2
-            local ts_ok aws_ok wg_ok
+            local ts_ok aws_ok
             ts_ok=$(ts_status)
             aws_ok=$(aws_vpn_status)
-            wg_ok=$(wg_status)
-            if [ "$ts_ok" = "connected" ] && [ "$aws_ok" = "connected" ] && [ "$wg_ok" = "connected" ]; then
-                ok "Preset all: all three VPNs connected!"
+            if [[ "$WG_ENABLED" == "true" ]]; then
+                local wg_ok
+                wg_ok=$(wg_status)
+                if [ "$ts_ok" = "connected" ] && [ "$aws_ok" = "connected" ] && [ "$wg_ok" = "connected" ]; then
+                    ok "Preset all: all three VPNs connected!"
+                else
+                    err "Preset all: state mismatch — Tailscale=$ts_ok, AWS=$aws_ok, WatchGuard=$wg_ok"
+                    warn "Route table for debugging:"
+                    route_snapshot
+                    return 1
+                fi
             else
-                err "Preset all: state mismatch — Tailscale=$ts_ok, AWS=$aws_ok, WatchGuard=$wg_ok"
-                warn "Route table for debugging:"
-                route_snapshot
-                return 1
+                if [ "$ts_ok" = "connected" ] && [ "$aws_ok" = "connected" ]; then
+                    ok "Preset all: both VPNs connected!"
+                else
+                    err "Preset all: state mismatch — Tailscale=$ts_ok, AWS=$aws_ok"
+                    warn "Route table for debugging:"
+                    route_snapshot
+                    return 1
+                fi
             fi
 
             net_check
@@ -184,6 +203,13 @@ cmd_preset() {
 }
 
 # ── Main dispatch ───────────────────────────────────────────────────
+wg_guard() {
+    if [[ "$WG_ENABLED" != "true" ]]; then
+        err "WatchGuard is disabled (see vpn/config)"
+        exit 1
+    fi
+}
+
 case "${1:-}" in
     status)     cmd_status ;;
     check)      net_check ;;
@@ -192,12 +218,13 @@ case "${1:-}" in
     ts-down)    ts_down ;;
     aws-up)     aws_vpn_up ;;
     aws-down)   aws_vpn_down ;;
-    wg-up)      wg_up ;;
-    wg-down)    wg_down ;;
+    wg-up)      wg_guard; wg_up ;;
+    wg-down)    wg_guard; wg_down ;;
     preset)     cmd_preset "${2:-}" ;;
     kill-all)   cmd_kill_all ;;
     recover)    cmd_recover ;;
     wg-set-password)
+        wg_guard
         echo -n "WatchGuard password: "
         read -rs pw
         echo

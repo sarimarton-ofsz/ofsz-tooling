@@ -13,6 +13,10 @@ VPN_DIR="$HOME/.config/ofsz-tooling/vpn"
 VPN="$VPN_DIR/vpn"
 TS_CLI="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 
+# ── Config ──────────────────────────────────────────────────
+WG_ENABLED=true
+[ -f "$VPN_DIR/config" ] && source "$VPN_DIR/config"
+
 # ── Fast status checks (no AppleScript — pure process/route detection) ──
 
 fast_ts_status() {
@@ -72,7 +76,11 @@ aws_detail() {
 
 ts=$(fast_ts_status)
 aws=$(fast_aws_status)
-wg=$(fast_wg_status)
+if [[ "$WG_ENABLED" == "true" ]]; then
+    wg=$(fast_wg_status)
+else
+    wg="disabled"
+fi
 
 # ── AWS auto-reconnect (if dropped unexpectedly) ─────────
 RECONNECT_FLAG="$VPN_DIR/run/aws-auto-reconnect"
@@ -95,7 +103,7 @@ status_color() {
 n=0
 [[ "$ts"  == "connected" ]] && ((n++)) || true
 [[ "$aws" == "connected" ]] && ((n++)) || true
-[[ "$wg"  == "connected" ]] && ((n++)) || true
+[[ "$WG_ENABLED" == "true" ]] && [[ "$wg" == "connected" ]] && ((n++)) || true
 
 # ── Menu bar ───────────────────────────────────────────────
 
@@ -126,11 +134,13 @@ else
 fi
 
 # WatchGuard
-if [[ "$wg" == "connected" ]]; then
-    echo "WatchGuard | size=13 color=$(status_color "$wg") checked=true bash=$VPN param1=wg-down terminal=false refresh=true"
-    echo "WatchGuard (verbose) | size=13 color=$(status_color "$wg") checked=true bash=$VPN param1=wg-down terminal=true refresh=true alternate=true"
-else
-    echo "WatchGuard | size=13 color=$(status_color "$wg") bash=$VPN param1=wg-up terminal=true refresh=true"
+if [[ "$WG_ENABLED" == "true" ]]; then
+    if [[ "$wg" == "connected" ]]; then
+        echo "WatchGuard | size=13 color=$(status_color "$wg") checked=true bash=$VPN param1=wg-down terminal=false refresh=true"
+        echo "WatchGuard (verbose) | size=13 color=$(status_color "$wg") checked=true bash=$VPN param1=wg-down terminal=true refresh=true alternate=true"
+    else
+        echo "WatchGuard | size=13 color=$(status_color "$wg") bash=$VPN param1=wg-up terminal=true refresh=true"
+    fi
 fi
 
 # Tailscale

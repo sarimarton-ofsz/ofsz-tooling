@@ -4,6 +4,11 @@
 
 set -euo pipefail
 
+# ── Config ──────────────────────────────────────────────────────────
+WG_ENABLED=true
+CONFIG_FILE="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}/config"
+[ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
+
 # ── Colors ──────────────────────────────────────────────────────────
 RED="\033[0;31m"; GREEN="\033[0;32m"; YELLOW="\033[1;33m"; BLUE="\033[0;34m"; NC="\033[0m"
 
@@ -268,7 +273,7 @@ net_check() {
     echo "  Default gateway:  $(netstat -rn -f inet 2>/dev/null | awk '/^default/{print $2; exit}')"
     echo "  Tailscale:        $(ts_status)"
     echo "  AWS VPN:          $(aws_vpn_status)"
-    echo "  WatchGuard:       $(wg_status)"
+    [[ "$WG_ENABLED" == "true" ]] && echo "  WatchGuard:       $(wg_status)"
     echo "  Internet (1.1.1.1): $(ping -c1 -W2 1.1.1.1 &>/dev/null && echo "ok" || echo "FAIL")"
     echo "  DNS (google.com):   $(ping -c1 -W2 google.com &>/dev/null && echo "ok" || echo "FAIL")"
 }
