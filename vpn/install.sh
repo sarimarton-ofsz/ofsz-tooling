@@ -179,7 +179,8 @@ if [ $failed -eq 0 ]; then
     gum style --bold --foreground 212 "VPN Connect"
 
     # Source lib.sh for vpn functions
-    SCRIPT_DIR="$TOOL_DIR" source "$TOOL_DIR/lib.sh"
+    export SCRIPT_DIR="$TOOL_DIR"
+    source "$TOOL_DIR/lib.sh"
 
     # Tailscale
     if [ "$(ts_status)" = "connected" ]; then
