@@ -109,6 +109,11 @@ fi
 if [ -d "$SWIFTBAR_PLUGINS" ] && [ -f "$SWIFTBAR_SRC" ]; then
     rm -rf "$SWIFTBAR_DEST"
     ln -sf "$SWIFTBAR_SRC" "$SWIFTBAR_DEST"
+    # Ensure SwiftBar is running (may have been stopped by uninstall or not started)
+    if ! pgrep -x SwiftBar &>/dev/null; then
+        open -a SwiftBar
+        sleep 2
+    fi
     open -g "swiftbar://refreshallplugins" 2>/dev/null || true
     gum log --level info --prefix "✓" "SwiftBar plugin symlinked"
 fi
