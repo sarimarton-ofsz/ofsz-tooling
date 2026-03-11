@@ -97,6 +97,11 @@ fi
 # ── 6. AWS VPN Client ────────────────────────────────────
 if [ -x "$OVPN_BIN" ]; then
     gum log --level info --prefix "✓" "AWS VPN Client: installed"
+    # Quit GUI — CLI manages the connection; GUI fights over tun device
+    if pgrep -qf "AWS VPN Client.app/Contents/MacOS" 2>/dev/null; then
+        osascript -e 'tell application "AWS VPN Client" to quit' 2>/dev/null || true
+        gum log --level info --prefix "✓" "AWS VPN Client GUI: quit (CLI takes over)"
+    fi
 else
     warn_prereq "AWS VPN Client: not installed → https://self-service.clientvpn.amazonaws.com/endpoints/cvpn-endpoint-022755a701a9c6b8c"
 fi
