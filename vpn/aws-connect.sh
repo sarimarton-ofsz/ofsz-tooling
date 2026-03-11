@@ -220,28 +220,22 @@ do_connect() {
     # Save frontmost app so we can restore focus after Chrome steals it
     local front_app
     front_app=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null) || true
-    # Use dedicated Chrome profile so the Entra SSO cookie persists
-    # across reconnects without polluting the user's personal profile.
-    CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    if [ -x "$CHROME_BIN" ]; then
-        # Kill Chrome first so --profile-directory is respected on fresh launch
-        if pgrep -x "Google Chrome" &>/dev/null; then
-            log "Closing Chrome to relaunch with OFSZ-VPN profile..."
-            osascript -e 'tell application "Google Chrome" to quit' 2>/dev/null || true
-            sleep 2
-        fi
-        "$CHROME_BIN" --profile-directory="OFSZ-VPN" "$saml_url" &>/dev/null &
+    # Open SAML URL in Chrome via AppleScript (most reliable on macOS).
+    # Direct binary calls and `open -a --args` fail in various scenarios
+    # (Chrome already running, curl|bash context, profile flags ignored).
+    if [ -d "/Applications/Google Chrome.app" ]; then
+        osascript <<CHROME_EOF 2>/dev/null
+tell application "Google Chrome"
+    activate
+    make new window
+    set URL of active tab of front window to "$saml_url"
+end tell
+CHROME_EOF
         SAML_BROWSER="chrome"
-        # Profile rename happens after SAML capture when Chrome is quit
     else
         warn "Chrome not found, falling back to Safari (may need manual alert dismiss)"
         open -g "$saml_url"
         SAML_BROWSER="safari"
-    fi
-    # Restore focus — open -g doesn't always prevent Chrome from activating
-    if [ -n "$front_app" ]; then
-        sleep 0.3
-        osascript -e "tell application \"$front_app\" to activate" 2>/dev/null || true
     fi
 
     # Wait for SAML response (Python server captures the POST from browser)
@@ -262,21 +256,8 @@ do_connect() {
     # Give the user a moment to interact with Chrome (e.g. "Save password" dialog)
     sleep 3
 
-    # Close the SAML browser tab, then quit Chrome so we can rename the profile
+    # Close the SAML browser tab
     close_saml_tab
-    osascript -e 'tell application "Google Chrome" to quit' 2>/dev/null || true
-    sleep 1
-    # Rename OFSZ-VPN profile (must happen after Chrome exits — it overwrites Local State on quit)
-    local _local_state="$HOME/Library/Application Support/Google/Chrome/Local State"
-    [ -f "$_local_state" ] && python3 -c "
-import json
-p = '$_local_state'
-with open(p) as f: d = json.load(f)
-ic = d.get('profile', {}).get('info_cache', {}).get('OFSZ-VPN')
-if ic and ic.get('name') != 'OFSZ VPN':
-    ic['name'] = 'OFSZ VPN'
-    with open(p, 'w') as f: json.dump(d, f)
-" 2>/dev/null || true
 
     if [ ! -s "$SAML_RESPONSE_FILE" ]; then
         err "SAML auth timeout (120s)"
