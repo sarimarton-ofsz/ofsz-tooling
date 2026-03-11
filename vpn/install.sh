@@ -58,6 +58,7 @@ if [ ! -d "$SWIFTBAR_PLUGINS" ]; then
     gum log --level info "SwiftBar not found — installing..."
     brew install --cask swiftbar
     mkdir -p "$SWIFTBAR_PLUGINS"
+    open -a SwiftBar
 fi
 
 if [ -d "$SWIFTBAR_PLUGINS" ] && [ -f "$SWIFTBAR_SRC" ]; then
