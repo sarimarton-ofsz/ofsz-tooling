@@ -100,7 +100,8 @@ if [ ! -d "/Applications/SwiftBar.app" ]; then
     # Set plugin directory before first launch to skip the directory picker dialog
     defaults write com.ameba.SwiftBar PluginDirectory -string "$SWIFTBAR_PLUGINS"
     open -a SwiftBar
-    sleep 2
+    gum log --level info "  → Ha macOS engedélyt kér a SwiftBar futtatásához, engedélyezd"
+    gum confirm "SwiftBar elindult?" --default=yes --affirmative "Igen, mehet tovább" --negative "Nem indult el"
 elif [ ! -d "$SWIFTBAR_PLUGINS" ]; then
     mkdir -p "$SWIFTBAR_PLUGINS"
 fi
