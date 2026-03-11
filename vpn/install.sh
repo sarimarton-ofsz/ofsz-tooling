@@ -204,13 +204,17 @@ if [ $failed -eq 0 ]; then
     # we reconnect to seed the cookie in the right profile.
     echo ""
     gum style --bold --foreground 212 "AWS VPN — Entra ID bejelentkezés"
-    gum log --level info "Chrome megnyílik egy dedikált „OFSZ VPN" profillal."
-    gum log --level info "  → Ez egy új, üres Chrome profil (nem a személyes profil)"
-    gum log --level info "  → Az első indításnál Chrome EU-s keresőválasztót mutathat — ez normális"
-    gum log --level info "  → Jelentkezz be az Entra ID-val (céges Microsoft fiók)"
-    gum confirm "Tovább?" --default=yes --affirmative "Chrome megnyitása" --negative "Mégse" || { gum log --level warn "AWS VPN: skipped"; failed=1; }
-    aws_vpn_down 2>/dev/null || true
-    aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
+    gum log --level info 'Chrome megnyílik egy dedikált "OFSZ VPN" profillal.'
+    gum log --level info "  Ez egy uj, ures Chrome profil (nem a szemelyes profil)"
+    gum log --level info "  Az elso inditasnal Chrome EU-s keresovalasztot mutathat - ez normalis"
+    gum log --level info "  Jelentkezz be az Entra ID-val (ceges Microsoft fiok)"
+    if gum confirm "Tovabb?" --default=yes --affirmative "Chrome megnyitasa" --negative "Megse"; then
+        aws_vpn_down 2>/dev/null || true
+        aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
+    else
+        gum log --level warn "AWS VPN: skipped"
+        failed=1
+    fi
 
     # WatchGuard
     if ! $SKIP_WG; then
