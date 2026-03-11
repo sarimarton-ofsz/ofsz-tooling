@@ -13,6 +13,12 @@ if ! command -v gum &>/dev/null; then
     exit 1
 fi
 
+# ── 0. Disconnect all VPNs ────────────────────────────
+export SCRIPT_DIR="$TOOL_DIR"
+source "$TOOL_DIR/lib.sh" 2>/dev/null || true
+aws_vpn_down 2>/dev/null && gum log --level info --prefix "✓" "AWS VPN disconnected" || true
+wg_down 2>/dev/null && gum log --level info --prefix "✓" "WatchGuard disconnected" || true
+
 # ── 1. Remove PATH from shell rc ────────────────────────
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     if [ -f "$rc" ] && grep -qF '.config/ofsz-tooling/vpn' "$rc" 2>/dev/null; then
