@@ -84,11 +84,19 @@ fi
 
 # ── AWS auto-reconnect (if dropped unexpectedly) ─────────
 RECONNECT_FLAG="$VPN_DIR/run/aws-auto-reconnect"
+RECONNECT_LOCK="$VPN_DIR/run/reconnect.lock"
 if [[ "$aws" == "disconnected" ]] && [[ -f "$RECONNECT_FLAG" ]]; then
-    # Launch reconnect in background (lock file in aws-connect.sh prevents duplicates)
-    # aws-up handles Tailscale cycling automatically: ts-down → connect → ts-up
-    nohup bash -c '"$1" aws-up &>"$2"' _ "$VPN" "$VPN_DIR/run/reconnect.log" </dev/null &
-    aws="reconnecting"
+    # Check if a reconnect attempt is already running (vpn aws-up or aws-connect.sh)
+    reconnect_pid=$(cat "$RECONNECT_LOCK" 2>/dev/null) || true
+    if [[ -n "$reconnect_pid" ]] && kill -0 "$reconnect_pid" 2>/dev/null; then
+        aws="reconnecting"
+    else
+        # Launch reconnect with lock — prevents SwiftBar from stacking attempts
+        # that each kill the previous VPN via cmd_down before reconnecting
+        nohup bash -c 'echo $$ > "$3" && "$1" aws-up &>"$2"; rm -f "$3"' \
+            _ "$VPN" "$VPN_DIR/run/reconnect.log" "$RECONNECT_LOCK" </dev/null &
+        aws="reconnecting"
+    fi
 fi
 
 status_color() {
