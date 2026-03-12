@@ -122,14 +122,18 @@ expected=0
 ((expected++)) || true  # AWS always expected
 [[ "$WG_ENABLED" == "true" ]] && ((expected++)) || true
 
-# ── Menu bar ───────────────────────────────────────────────
+# ── Menu bar (ANSI 16-color for text, sfcolor for icon) ───
+A_RST=$'\033[0m'
+A_GREEN=$'\033[32m'
+A_YELLOW=$'\033[33m'
+A_DIM=$'\033[38;5;243m'
 
 if (( n == expected )); then
-    echo "✓ | sfimage=lock.shield.fill sfcolor=#34C759 sfsize=14"
+    echo "${A_GREEN}✓${A_RST} | ansi=true sfimage=lock.shield.fill sfcolor=#34C759 sfsize=14"
 elif (( n > 0 )); then
-    echo "$n/$expected | sfimage=lock.shield.fill sfcolor=#E6B310 sfsize=14"
+    echo "${A_YELLOW}$n/$expected${A_RST} | ansi=true sfimage=lock.shield.fill sfcolor=#E6B310 sfsize=14"
 else
-    echo "| sfimage=lock.shield sfcolor=#8E8E93 sfsize=14"
+    echo "${A_DIM}—${A_RST} | ansi=true sfimage=lock.shield sfcolor=#8E8E93 sfsize=14"
 fi
 
 echo "---"
