@@ -85,17 +85,20 @@ fi
 # ── AWS auto-reconnect (if dropped unexpectedly) ─────────
 RECONNECT_FLAG="$VPN_DIR/run/aws-auto-reconnect"
 RECONNECT_LOCK="$VPN_DIR/run/reconnect.lock"
+OVPN_BIN="/Applications/AWS VPN Client/AWS VPN Client.app/Contents/Resources/openvpn/acvc-openvpn"
 if [[ "$aws" == "disconnected" ]] && [[ -f "$RECONNECT_FLAG" ]]; then
-    # Check if a reconnect attempt is already running (vpn aws-up or aws-connect.sh)
-    reconnect_pid=$(cat "$RECONNECT_LOCK" 2>/dev/null) || true
-    if [[ -n "$reconnect_pid" ]] && kill -0 "$reconnect_pid" 2>/dev/null; then
-        aws="reconnecting"
+    if ! sudo -n "$OVPN_BIN" --version &>/dev/null; then
+        # Passwordless sudo not configured — can't reconnect without terminal
+        aws="no-sudo"
     else
-        # Launch reconnect with lock — prevents SwiftBar from stacking attempts
-        # that each kill the previous VPN via cmd_down before reconnecting
-        nohup bash -c 'echo $$ > "$3" && "$1" aws-up &>"$2"; rm -f "$3"' \
-            _ "$VPN" "$VPN_DIR/run/reconnect.log" "$RECONNECT_LOCK" </dev/null &
-        aws="reconnecting"
+        reconnect_pid=$(cat "$RECONNECT_LOCK" 2>/dev/null) || true
+        if [[ -n "$reconnect_pid" ]] && kill -0 "$reconnect_pid" 2>/dev/null; then
+            aws="reconnecting"
+        else
+            nohup bash -c 'echo $$ > "$3" && "$1" aws-up &>"$2"; rm -f "$3"' \
+                _ "$VPN" "$VPN_DIR/run/reconnect.log" "$RECONNECT_LOCK" </dev/null &
+            aws="reconnecting"
+        fi
     fi
 fi
 
@@ -104,6 +107,7 @@ status_color() {
         connected)              echo "#33CC33" ;;
         disconnected|stopped)   echo "#FF3B30" ;;
         connecting|reconnecting) echo "#E6B310" ;;
+        no-sudo)                echo "#FF6B00" ;;
         *)                      echo "#888888" ;;
     esac
 }
@@ -137,8 +141,11 @@ aws_extra=""
 if [[ "$aws" == "connected" ]]; then
     echo "AWS VPN | size=13 color=$(status_color "$aws") checked=true badge=$aws_iface bash=$VPN param1=aws-down terminal=false refresh=true${aws_extra}"
     echo "AWS VPN (verbose) | size=13 color=$(status_color "$aws") checked=true bash=$VPN param1=aws-down terminal=true refresh=true alternate=true"
+elif [[ "$aws" == "no-sudo" ]]; then
+    echo "AWS VPN ⚠ sudo | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=true refresh=true"
 else
     echo "AWS VPN | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=false refresh=true"
+    echo "AWS VPN (verbose) | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=true refresh=true alternate=true"
 fi
 
 # WatchGuard

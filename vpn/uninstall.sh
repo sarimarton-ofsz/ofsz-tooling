@@ -62,11 +62,11 @@ else
     gum log --level info --prefix "·" "WatchGuard password: already removed"
 fi
 
-# ── 5. Kill isolated VPN Chrome + remove runtime dir ──
+# ── 5. Kill isolated VPN Chrome ──────────────────────
 pkill -f "user-data-dir=$TOOL_DIR/run/chrome-data" 2>/dev/null || true
 
-# ── 6. Remove runtime dir (includes chrome-data) ─────
+# ── 6. Remove runtime dir (preserve chrome-data for SSO cookie) ──
 if [ -d "$TOOL_DIR/run" ]; then
-    rm -rf "$TOOL_DIR/run"
-    gum log --level info --prefix "✓" "Runtime dir removed"
+    find "$TOOL_DIR/run" -maxdepth 1 ! -name run ! -name chrome-data -exec rm -rf {} + 2>/dev/null
+    gum log --level info --prefix "✓" "Runtime dir cleaned (SSO cookie preserved)"
 fi
