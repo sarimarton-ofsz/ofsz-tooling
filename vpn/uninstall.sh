@@ -20,8 +20,14 @@ if [ -n "$aws_pid" ]; then
     sudo kill "$aws_pid" 2>/dev/null || kill "$aws_pid" 2>/dev/null || true
     gum log --level info --prefix "✓" "AWS VPN stopped"
 fi
-# SwiftBar (stop polling before we remove the symlink)
-killall SwiftBar 2>/dev/null && gum log --level info --prefix "✓" "SwiftBar stopped" || true
+# SwiftBar (only stop if no other plugins remain after removing ours)
+SWIFTBAR_DIR="$(dirname "$SWIFTBAR_LINK")"
+other_plugins=$(find "$SWIFTBAR_DIR" -maxdepth 1 -name '*.sh' ! -name 'vpn.30s.sh' 2>/dev/null | head -1)
+if [ -z "$other_plugins" ]; then
+    killall SwiftBar 2>/dev/null && gum log --level info --prefix "✓" "SwiftBar stopped (no other plugins)" || true
+else
+    gum log --level info --prefix "·" "SwiftBar: kept running (other plugins present)"
+fi
 
 # ── 1. Remove PATH from shell rc ────────────────────────
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
