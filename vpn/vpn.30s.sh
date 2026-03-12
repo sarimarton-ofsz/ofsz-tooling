@@ -113,14 +113,21 @@ status_color() {
 }
 
 n=0
+expected=0
 [[ "$ts"  == "connected" ]] && ((n++)) || true
 [[ "$aws" == "connected" ]] && ((n++)) || true
 [[ "$WG_ENABLED" == "true" ]] && [[ "$wg" == "connected" ]] && ((n++)) || true
+# Count how many VPNs are configured (expected to be connected)
+((expected++)) || true  # Tailscale always expected
+((expected++)) || true  # AWS always expected
+[[ "$WG_ENABLED" == "true" ]] && ((expected++)) || true
 
 # ── Menu bar ───────────────────────────────────────────────
 
-if (( n > 0 )); then
-    echo "$n | sfimage=lock.shield.fill sfcolor=#34C759 sfsize=14"
+if (( n == expected )); then
+    echo "✓ | sfimage=lock.shield.fill sfcolor=#34C759 sfsize=14"
+elif (( n > 0 )); then
+    echo "$n/$expected | sfimage=lock.shield.fill sfcolor=#E6B310 sfsize=14"
 else
     echo "| sfimage=lock.shield sfcolor=#8E8E93 sfsize=14"
 fi
