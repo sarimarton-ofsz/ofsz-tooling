@@ -214,8 +214,14 @@ if [ $failed -eq 0 ]; then
         gum log --level info "Chrome megnyilik egy izolalt VPN profillal (nem a szemelyes profil)."
         gum log --level info "  Az elso inditasnal Chrome EU-s keresovalasztot mutathat - ez normalis"
     fi
-    gum log --level info "  Jelentkezz be az Entra ID-val (ceges Microsoft fiok)"
-    if gum confirm "Tovabb?" --default=yes --affirmative "Chrome megnyitasa" --negative "Megse"; then
+    echo ""
+    gum log --level info "A folyamat kb. 1-2 percig tart:"
+    gum log --level info "  1. AWS szerver kapcsolat + SAML token kinyerese (~10 mp)"
+    gum log --level info "  2. Chrome megnyilik → jelentkezz be ceges Microsoft fiokkal"
+    gum log --level info "  3. Bejelentkezes utan Chrome automatikusan bezarul"
+    gum log --level info "  4. VPN tunnel felepitese (~5 mp)"
+    echo ""
+    if gum confirm "Inditas?" --default=yes --affirmative "Mehet" --negative "Megse"; then
         aws_vpn_down 2>/dev/null || true
         aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
     else

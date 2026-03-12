@@ -149,7 +149,7 @@ print(profiles[0]['OvpnConfigFilePath'])
 get_saml_info() {
     local ovpn_config="$1"
 
-    log "Phase 1: extracting SAML URL..."
+    log "AWS szerver kapcsolodas + SAML token kinyerese (ez ~10 mp)..."
 
     # openvpn connects, gets AUTH_FAILED with CRV1 response — no tun device needed
     # Response format: AUTH_FAILED,CRV1:R:<SID>:<extra>:<SAML_URL>
@@ -236,7 +236,7 @@ do_connect() {
     fi
 
     # Wait for SAML response (Python server captures the POST from browser)
-    log "Waiting for SAML auth..."
+    log "Varakozas bejelentkezesre a Chrome ablakban..."
     local i=0
     while [ $i -lt 120 ]; do
         if [ -f "$SAML_RESPONSE_FILE" ] && [ -s "$SAML_RESPONSE_FILE" ]; then
@@ -269,7 +269,7 @@ do_connect() {
     saml_response=$(cat "$SAML_RESPONSE_FILE")
 
     # Phase 2: VPN connection (sudo needed for tun device)
-    log "Phase 2: connecting VPN tunnel..."
+    log "VPN tunnel felepitese..."
     # Pre-create log+pid as user (writable by root via 666) so we can read them later
     rm -f "$OVPN_LOG" "$OVPN_PID_FILE" 2>/dev/null || true
     : > "$OVPN_LOG"
