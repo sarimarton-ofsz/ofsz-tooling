@@ -215,10 +215,10 @@ if [ $failed -eq 0 ]; then
         gum log --level info "  Az elso inditasnal Chrome EU-s keresovalasztot mutathat - ez normalis"
     fi
     echo ""
-    gum log --level info "  1. AWS szerver kapcsolat + SAML token kinyerese"
-    gum log --level info "     ⏳ Ez a lepes 1-2 percig tart — a terminal addig nem mutat kimenetet"
-    gum log --level info "  2. Chrome megnyilik → jelentkezz be ceges Microsoft fiokkal"
-    gum log --level info "  3. Bejelentkezes utan Chrome bezarul, VPN tunnel felepul"
+    gum log --level info "  1. Chrome megnyilik → jelentkezz be ceges Microsoft fiokkal"
+    gum log --level info "  2. Bejelentkezes utan Chrome bezarul, VPN tunnel felepul"
+    echo ""
+    gum log --level warn "⏳ Az inditas utan 1-2 percig nem tortenik semmi lathato — ez normalis, varj turelemmmel."
     echo ""
     if gum confirm "Inditas?" --default=yes --affirmative "Mehet" --negative "Megse"; then
         aws_vpn_down 2>/dev/null || true
