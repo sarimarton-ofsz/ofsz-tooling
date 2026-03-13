@@ -100,7 +100,10 @@ cmd_preset() {
             log "Preset: AWS + Tailscale (critical combo)"
 
             # Force clean ordering: disconnect all, then reconnect in safe order.
+            # Safety watchdog ensures Tailscale is restored within 3 minutes
+            # even if the AWS Entra SAML flow hangs.
             ts_down  || true
+            ts_watchdog_start
             [[ "$WG_ENABLED" == "true" ]] && { wg_down || true; }
             aws_vpn_down || true
             sleep 1
@@ -109,11 +112,12 @@ cmd_preset() {
             # AWS VPN tends to set aggressive default routes;
             # Tailscale added after can coexist via its CGNAT range (100.x)
             log "Phase 1: AWS VPN..."
-            aws_vpn_up || { err "AWS VPN failed — aborting preset"; return 1; }
+            aws_vpn_up || { ts_watchdog_stop; ts_up || true; err "AWS VPN failed — aborting preset"; return 1; }
 
             log "Saving route state pre-Tailscale..."
             route_snapshot
 
+            ts_watchdog_stop
             log "Phase 2: Tailscale..."
             ts_up || { err "Tailscale failed — AWS VPN still up"; return 1; }
 
@@ -145,12 +149,13 @@ cmd_preset() {
 
             log "Ensuring clean state..."
             ts_down  || true
+            ts_watchdog_start
             [[ "$WG_ENABLED" == "true" ]] && { wg_down || true; }
             aws_vpn_down || true
             sleep 1
 
             log "Phase 1: AWS VPN..."
-            aws_vpn_up || { err "AWS VPN failed — aborting preset"; return 1; }
+            aws_vpn_up || { ts_watchdog_stop; ts_up || true; err "AWS VPN failed — aborting preset"; return 1; }
 
             if [[ "$WG_ENABLED" == "true" ]]; then
                 log "Phase 2: WatchGuard..."
@@ -160,6 +165,7 @@ cmd_preset() {
             log "Saving route state pre-Tailscale..."
             route_snapshot
 
+            ts_watchdog_stop
             log "Phase $( [[ "$WG_ENABLED" == "true" ]] && echo 3 || echo 2 ): Tailscale..."
             ts_up || { err "Tailscale failed"; return 1; }
 

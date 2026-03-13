@@ -63,6 +63,32 @@ ts_down() {
     return 1
 }
 
+# ── Tailscale safety watchdog ──────────────────────────────────────
+# Background process that restores Tailscale after 3 minutes if it's still down.
+# Protects against AWS Entra SAML flow hanging and leaving Tailscale disconnected.
+TS_WATCHDOG_PID=""
+TS_WATCHDOG_TIMEOUT=180  # 3 minutes
+
+ts_watchdog_start() {
+    (
+        sleep $TS_WATCHDOG_TIMEOUT
+        if [ "$(ts_status)" != "connected" ]; then
+            warn "Tailscale watchdog: ${TS_WATCHDOG_TIMEOUT}s timeout — forcing restore"
+            ts_up || true
+        fi
+    ) &
+    TS_WATCHDOG_PID=$!
+    log "Tailscale safety watchdog started (${TS_WATCHDOG_TIMEOUT}s timeout, pid $TS_WATCHDOG_PID)"
+}
+
+ts_watchdog_stop() {
+    if [ -n "$TS_WATCHDOG_PID" ]; then
+        kill "$TS_WATCHDOG_PID" 2>/dev/null || true
+        wait "$TS_WATCHDOG_PID" 2>/dev/null || true
+        TS_WATCHDOG_PID=""
+    fi
+}
+
 # ── AWS VPN Client ──────────────────────────────────────────────────
 # Uses aws-connect.sh (CLI openvpn + SAML capture) instead of the GUI app.
 AWS_VPN_PID_FILE="$SCRIPT_DIR/run/openvpn.pid"
@@ -103,17 +129,21 @@ aws_vpn_up() {
 
     # If Tailscale is up, disconnect it first — AWS VPN sets aggressive routes
     # that conflict. Tailscale is restored after successful connect.
+    # Safety: a watchdog timer ensures Tailscale is restored within 3 minutes
+    # even if the AWS Entra SAML flow hangs or crashes.
     local ts_was_up=false
     if [ "$(ts_status)" = "connected" ]; then
         ts_was_up=true
         log "Tailscale is up — disconnecting before AWS connect..."
         ts_down || true
+        ts_watchdog_start
     fi
 
     log "AWS VPN: connecting via CLI (SAML)..."
     if "$SCRIPT_DIR/aws-connect.sh" up; then
         touch "$AWS_VPN_RECONNECT_FLAG"
         if $ts_was_up; then
+            ts_watchdog_stop
             log "Restoring Tailscale..."
             ts_up || err "Tailscale restore failed after AWS connect"
         fi
@@ -122,6 +152,7 @@ aws_vpn_up() {
 
     # AWS failed — restore Tailscale anyway
     if $ts_was_up; then
+        ts_watchdog_stop
         log "AWS failed — restoring Tailscale..."
         ts_up || true
     fi
