@@ -210,9 +210,7 @@ if [ $failed -eq 0 ]; then
     echo ""
     gum style --bold --foreground 212 "AWS VPN — Entra ID bejelentkezés"
     echo ""
-    gum log --level warn "⏳ Az indítás után kb. 1 percig nem történik semmi látható — ez normális, várj türelemmel."
-    echo ""
-    if gum confirm "Indítás?" --default=yes --affirmative "Mehet" --negative "Mégse"; then
+    if gum confirm "Indítás? (kb. 1 percig tart)" --default=yes --affirmative "Mehet" --negative "Mégse"; then
         aws_vpn_down 2>/dev/null || true
         aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
     else
