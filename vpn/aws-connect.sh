@@ -359,8 +359,12 @@ cmd_up() {
     log "Server IP: ${server_ip:-unknown}"
     log "SAML URL: ${saml_url:0:80}..."
 
-    ok "AWS szerver kész. Chrome megnyílik — jelentkezz be a céges Microsoft fiókkal."
-    read -rp "Nyomj Entert a folytatáshoz..." </dev/tty
+    if [ "${VPN_HEADLESS:-}" = "1" ]; then
+        log "Headless mód — Chrome automatikusan indul"
+    else
+        ok "AWS szerver kész. Chrome megnyílik — jelentkezz be a céges Microsoft fiókkal."
+        read -rp "Nyomj Entert a folytatáshoz..." </dev/tty
+    fi
 
     do_connect "$ovpn_config" "$sid" "$server_ip" "$saml_url"
 }

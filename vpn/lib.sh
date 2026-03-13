@@ -124,6 +124,7 @@ aws_vpn_up() {
     if [ "$(aws_vpn_status)" = "connected" ]; then
         ok "AWS VPN: already connected"
         touch "$AWS_VPN_RECONNECT_FLAG"
+        rm -f "$SCRIPT_DIR/run/reconnect-failures"
         return 0
     fi
 
@@ -140,8 +141,9 @@ aws_vpn_up() {
     fi
 
     log "AWS VPN: connecting via CLI (SAML)..."
-    if "$SCRIPT_DIR/aws-connect.sh" up; then
+    if VPN_HEADLESS="${VPN_HEADLESS:-0}" "$SCRIPT_DIR/aws-connect.sh" up; then
         touch "$AWS_VPN_RECONNECT_FLAG"
+        rm -f "$SCRIPT_DIR/run/reconnect-failures"
         if $ts_was_up; then
             ts_watchdog_stop
             log "Restoring Tailscale..."

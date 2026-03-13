@@ -85,19 +85,40 @@ fi
 # ── AWS auto-reconnect (if dropped unexpectedly) ─────────
 RECONNECT_FLAG="$VPN_DIR/run/aws-auto-reconnect"
 RECONNECT_LOCK="$VPN_DIR/run/reconnect.lock"
-OVPN_BIN="/Applications/AWS VPN Client/AWS VPN Client.app/Contents/Resources/openvpn/acvc-openvpn"
+RECONNECT_FAIL_FILE="$VPN_DIR/run/reconnect-failures"
+RECONNECT_MAX=3
+RECONNECT_COOLDOWN=300  # 5 min between retries
 if [[ "$aws" == "disconnected" ]] && [[ -f "$RECONNECT_FLAG" ]]; then
     if ! [ -f /etc/sudoers.d/vpn-aws ]; then
         # Passwordless sudo not configured — can't reconnect without terminal
         aws="no-sudo"
     else
-        reconnect_pid=$(cat "$RECONNECT_LOCK" 2>/dev/null) || true
-        if [[ -n "$reconnect_pid" ]] && kill -0 "$reconnect_pid" 2>/dev/null; then
-            aws="reconnecting"
+        failures=$(cat "$RECONNECT_FAIL_FILE" 2>/dev/null || echo 0)
+        if (( failures >= RECONNECT_MAX )); then
+            # Max retries — give up, preserve Tailscale stability
+            rm -f "$RECONNECT_FLAG" "$RECONNECT_FAIL_FILE"
+        elif [[ -f "$RECONNECT_FAIL_FILE" ]] && \
+             (( $(date +%s) - $(stat -f %m "$RECONNECT_FAIL_FILE") < RECONNECT_COOLDOWN )); then
+            # Cooldown active — skip this cycle
+            :
         else
-            nohup bash -c 'echo $$ > "$3" && "$1" aws-up &>"$2"; rm -f "$3"' \
-                _ "$VPN" "$VPN_DIR/run/reconnect.log" "$RECONNECT_LOCK" </dev/null &
-            aws="reconnecting"
+            reconnect_pid=$(cat "$RECONNECT_LOCK" 2>/dev/null) || true
+            if [[ -n "$reconnect_pid" ]] && kill -0 "$reconnect_pid" 2>/dev/null; then
+                aws="reconnecting"
+            else
+                VPN_HEADLESS=1 nohup bash -c '
+                    export VPN_HEADLESS=1
+                    echo $$ > "$3"
+                    if "$1" aws-up &>"$2"; then
+                        rm -f "$4"
+                    else
+                        prev=$(cat "$4" 2>/dev/null || echo 0)
+                        echo $((prev + 1)) > "$4"
+                    fi
+                    rm -f "$3"
+                ' _ "$VPN" "$VPN_DIR/run/reconnect.log" "$RECONNECT_LOCK" "$RECONNECT_FAIL_FILE" </dev/null &
+                aws="reconnecting"
+            fi
         fi
     fi
 fi
