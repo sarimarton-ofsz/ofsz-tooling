@@ -149,7 +149,7 @@ print(profiles[0]['OvpnConfigFilePath'])
 get_saml_info() {
     local ovpn_config="$1"
 
-    log "Csatlakozás az AWS szerverhez — ez kb. egy percig tart, várj türelemmel..."
+    log "Csatlakozás az AWS szerverhez — ez kb. 2 percig tart, várj türelemmel..."
 
     # openvpn connects, gets AUTH_FAILED with CRV1 response — no tun device needed
     # Response format: AUTH_FAILED,CRV1:R:<SID>:<extra>:<SAML_URL>
@@ -360,7 +360,7 @@ cmd_up() {
     log "SAML URL: ${saml_url:0:80}..."
 
     ok "AWS szerver kész. Chrome megnyílik — jelentkezz be a céges Microsoft fiókkal."
-    read -rp "Nyomj Entert a folytatáshoz..."
+    read -rp "Nyomj Entert a folytatáshoz..." </dev/tty
 
     do_connect "$ovpn_config" "$sid" "$server_ip" "$saml_url"
 }
