@@ -209,17 +209,6 @@ if [ $failed -eq 0 ]; then
     # we reconnect to seed the cookie in the right profile.
     echo ""
     gum style --bold --foreground 212 "AWS VPN — Entra ID bejelentkezés"
-    CHROME_VPN_DATA="$TOOL_DIR/run/chrome-data"
-    if [ ! -d "$CHROME_VPN_DATA" ]; then
-        gum log --level info "Chrome megnyílik egy izolált VPN profillal (nem a személyes profil)."
-        gum log --level info "  Az első indításnál Chrome EU-s keresőválasztót mutathat."
-    fi
-    echo ""
-    gum log --level info "  1. Chrome megnyílik → jelentkezz be céges Microsoft fiókkal"
-    gum log --level info "  2. Bejelentkezés után Chrome bezárul, VPN tunnel felépül"
-    echo ""
-    gum log --level warn "⏳ Az indítás után 1-2 percig nem történik semmi látható — ez normális, várj türelemmel."
-    echo ""
     if gum confirm "Indítás?" --default=yes --affirmative "Mehet" --negative "Mégse"; then
         aws_vpn_down 2>/dev/null || true
         aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
