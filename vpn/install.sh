@@ -76,7 +76,7 @@ if ! $SKIP_WG; then
     if security find-generic-password -s "vpn-watchguard" -w &>/dev/null; then
         gum log --level info --prefix "✓" "WatchGuard password: in keychain"
     else
-        pw=$(gum input --password --placeholder "WatchGuard jelszó" --header "Enter your WatchGuard VPN password:")
+        pw=$(gum input --password --placeholder "WatchGuard jelszó" --header "Add meg a Microsoft (céges) jelszavad:")
         if [ -n "$pw" ]; then
             security delete-generic-password -s "vpn-watchguard" 2>/dev/null || true
             security add-generic-password -s "vpn-watchguard" -a "watchguard" -w "$pw" -T ""
@@ -211,16 +211,16 @@ if [ $failed -eq 0 ]; then
     gum style --bold --foreground 212 "AWS VPN — Entra ID bejelentkezés"
     CHROME_VPN_DATA="$TOOL_DIR/run/chrome-data"
     if [ ! -d "$CHROME_VPN_DATA" ]; then
-        gum log --level info "Chrome megnyilik egy izolalt VPN profillal (nem a szemelyes profil)."
-        gum log --level info "  Az elso inditasnal Chrome EU-s keresovalasztot mutathat - ez normalis"
+        gum log --level info "Chrome megnyílik egy izolált VPN profillal (nem a személyes profil)."
+        gum log --level info "  Az első indításnál Chrome EU-s keresőválasztót mutathat."
     fi
     echo ""
-    gum log --level info "  1. Chrome megnyilik → jelentkezz be ceges Microsoft fiokkal"
-    gum log --level info "  2. Bejelentkezes utan Chrome bezarul, VPN tunnel felepul"
+    gum log --level info "  1. Chrome megnyílik → jelentkezz be céges Microsoft fiókkal"
+    gum log --level info "  2. Bejelentkezés után Chrome bezárul, VPN tunnel felépül"
     echo ""
-    gum log --level warn "⏳ Az inditas utan 1-2 percig nem tortenik semmi lathato — ez normalis, varj turelemmmel."
+    gum log --level warn "⏳ Az indítás után 1-2 percig nem történik semmi látható — ez normális, várj türelemmel."
     echo ""
-    if gum confirm "Inditas?" --default=yes --affirmative "Mehet" --negative "Megse"; then
+    if gum confirm "Indítás?" --default=yes --affirmative "Mehet" --negative "Mégse"; then
         aws_vpn_down 2>/dev/null || true
         aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
     else
