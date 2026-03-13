@@ -160,11 +160,11 @@ fi
 
 # ── 9. Sudoers: auto-setup if AWS VPN Client present ────
 if [ -x "$OVPN_BIN" ]; then
-    if sudo -n "$OVPN_BIN" --version &>/dev/null; then
+    sudoers_file="/etc/sudoers.d/vpn-aws"
+    if [ -f "$sudoers_file" ]; then
         gum log --level info --prefix "✓" "AWS VPN sudoers: configured"
     else
         ovpn_bin_escaped="${OVPN_BIN// /\\ }"
-        sudoers_file="/etc/sudoers.d/vpn-aws"
         gum log --level info "Configuring passwordless sudo for AWS VPN..."
         printf '%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: /bin/kill *\n' \
             "$USER" "$ovpn_bin_escaped" "$USER" | sudo tee "$sudoers_file" > /dev/null

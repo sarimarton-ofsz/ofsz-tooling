@@ -87,7 +87,7 @@ RECONNECT_FLAG="$VPN_DIR/run/aws-auto-reconnect"
 RECONNECT_LOCK="$VPN_DIR/run/reconnect.lock"
 OVPN_BIN="/Applications/AWS VPN Client/AWS VPN Client.app/Contents/Resources/openvpn/acvc-openvpn"
 if [[ "$aws" == "disconnected" ]] && [[ -f "$RECONNECT_FLAG" ]]; then
-    if ! sudo -n "$OVPN_BIN" --version &>/dev/null; then
+    if ! [ -f /etc/sudoers.d/vpn-aws ]; then
         # Passwordless sudo not configured — can't reconnect without terminal
         aws="no-sudo"
     else

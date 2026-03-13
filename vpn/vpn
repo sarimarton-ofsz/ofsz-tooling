@@ -243,7 +243,7 @@ case "${1:-}" in
             err "  https://self-service.clientvpn.amazonaws.com/endpoints/cvpn-endpoint-022755a701a9c6b8c"
             exit 1
         fi
-        if sudo -n "$ovpn_bin" --version &>/dev/null; then
+        if [ -f /etc/sudoers.d/vpn-aws ]; then
             ok "Passwordless sudo already configured — nothing to do"
             exit 0
         fi
