@@ -106,8 +106,7 @@ if [[ "$aws" == "disconnected" ]] && [[ -f "$RECONNECT_FLAG" ]]; then
             if [[ -n "$reconnect_pid" ]] && kill -0 "$reconnect_pid" 2>/dev/null; then
                 aws="reconnecting"
             else
-                VPN_HEADLESS=1 nohup bash -c '
-                    export VPN_HEADLESS=1
+                nohup bash -c '
                     echo $$ > "$3"
                     if "$1" aws-up &>"$2"; then
                         rm -f "$4"

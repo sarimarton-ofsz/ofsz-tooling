@@ -141,7 +141,7 @@ aws_vpn_up() {
     fi
 
     log "AWS VPN: connecting via CLI (SAML)..."
-    if VPN_HEADLESS="${VPN_HEADLESS:-0}" "$SCRIPT_DIR/aws-connect.sh" up; then
+    if "$SCRIPT_DIR/aws-connect.sh" up; then
         touch "$AWS_VPN_RECONNECT_FLAG"
         rm -f "$SCRIPT_DIR/run/reconnect-failures"
         if $ts_was_up; then

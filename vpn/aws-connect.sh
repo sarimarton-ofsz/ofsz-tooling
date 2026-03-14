@@ -250,15 +250,11 @@ do_connect() {
     kill "$server_pid" 2>/dev/null || true
     wait "$server_pid" 2>/dev/null || true
 
-    # Give the user a moment to interact with Chrome (e.g. "Save password" dialog)
-    sleep 3
-
-    # Kill the isolated VPN Chrome instance (won't affect the user's main Chrome)
-    if [ -n "${CHROME_VPN_PID:-}" ]; then
-        kill "$CHROME_VPN_PID" 2>/dev/null || true
-    fi
-    # Fallback: kill any Chrome using our data dir
-    pkill -f "user-data-dir=$CHROME_VPN_DATA" 2>/dev/null || true
+    # Keep VPN Chrome alive — Entra session cookies only persist while Chrome
+    # is running (KMSI disabled by tenant, only session cookies available).
+    # Killing Chrome = next auto-reconnect can't reuse the session.
+    # close_saml_tab is enough to clean up the visible tab.
+    close_saml_tab
 
     if [ ! -s "$SAML_RESPONSE_FILE" ]; then
         err "SAML auth timeout (120s)"
@@ -358,13 +354,6 @@ cmd_up() {
     log "SID: $sid"
     log "Server IP: ${server_ip:-unknown}"
     log "SAML URL: ${saml_url:0:80}..."
-
-    if [ "${VPN_HEADLESS:-}" = "1" ]; then
-        log "Headless mód — Chrome automatikusan indul"
-    else
-        ok "AWS szerver kész. Chrome megnyílik — jelentkezz be a céges Microsoft fiókkal."
-        read -rp "Nyomj Entert a folytatáshoz..." </dev/tty
-    fi
 
     do_connect "$ovpn_config" "$sid" "$server_ip" "$saml_url"
 }
