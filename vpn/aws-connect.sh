@@ -217,17 +217,10 @@ do_connect() {
     # HTTPS→HTTP form POST from Entra ID goes through without a blocking alert.
     # Safari shows an "insecure form submission" sheet that requires manual dismiss.
     log "Opening browser for Entra ID auth..."
-    # Save frontmost app so we can restore focus after Chrome steals it
-    local front_app
-    front_app=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null) || true
-    # Isolated Chrome instance with --user-data-dir (separate from personal profile).
-    # open -na forces a new Chrome instance, so --user-data-dir is respected
-    # even when Chrome is already running. Entra SSO cookies persist across reconnects.
-    CHROME_VPN_DATA="$RUNTIME_DIR/chrome-data"
+    # Open SAML URL in user's default Chrome (session cookies are already there).
+    # open -g opens in background to avoid focus steal.
     if [ -d "/Applications/Google Chrome.app" ]; then
-        open -na "Google Chrome" --args --user-data-dir="$CHROME_VPN_DATA" "$saml_url"
-        sleep 1
-        CHROME_VPN_PID=$(pgrep -n -f "user-data-dir=$CHROME_VPN_DATA" 2>/dev/null) || true
+        open -g -a "Google Chrome" "$saml_url"
         SAML_BROWSER="chrome"
     else
         warn "Chrome not found, falling back to Safari (may need manual alert dismiss)"
