@@ -94,7 +94,7 @@ echo ""
 gum style --faint "A telepítő feltételezi, hogy minden VPN már be van állítva és működik:" \
     "" \
     "  • Tailscale — telepítve és bejelentkezve" \
-    "  • AWS VPN Client — telepítve, profil konfigurálva (legalább 1 GUI-s csatlakozás)" \
+    "  • AWS VPN Client — telepítve, profil konfigurálva (legalább 1 GUI-s csatlakozás volt)" \
     "$( [ "$SKIP_WG" = "false" ] && echo '  • WatchGuard — futó kliens a céges jelszóval' || true )"
 echo ""
 if ! gum confirm "Megerősítem, ezek működnek" --default=yes --affirmative "Megerősítem" --negative "Mégsem"; then
@@ -250,9 +250,9 @@ if [ $failed -eq 0 ]; then
     # ── Verification: wait for all VPNs to be connected ──
     echo ""
     gum style --bold --foreground 212 "Ellenőrzés"
-    local max_wait=90 waited=0
+    max_wait=90; waited=0
     while [ $waited -lt $max_wait ]; do
-        local ts_ok aws_ok wg_ok=true
+        ts_ok=""; aws_ok=""; wg_ok=true
         ts_ok=$(ts_status)
         aws_ok=$(aws_vpn_status)
         $SKIP_WG || wg_ok=$(wg_status)
