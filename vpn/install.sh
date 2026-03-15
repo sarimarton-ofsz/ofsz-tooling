@@ -231,6 +231,38 @@ if [ $failed -eq 0 ]; then
             wg_up || { gum log --level warn "WatchGuard: failed"; failed=1; }
         fi
     fi
+
+    # ── Verification: wait for all VPNs to be connected ──
+    echo ""
+    gum style --bold --foreground 212 "Ellenőrzés"
+    local max_wait=90 waited=0
+    while [ $waited -lt $max_wait ]; do
+        local ts_ok aws_ok wg_ok=true
+        ts_ok=$(ts_status)
+        aws_ok=$(aws_vpn_status)
+        $SKIP_WG || wg_ok=$(wg_status)
+
+        if [ "$ts_ok" = "connected" ] && [ "$aws_ok" = "connected" ] && { $SKIP_WG || [ "$wg_ok" = "connected" ]; }; then
+            gum log --level info --prefix "✓" "Tailscale: connected"
+            gum log --level info --prefix "✓" "AWS VPN: connected"
+            $SKIP_WG || gum log --level info --prefix "✓" "WatchGuard: connected"
+            break
+        fi
+
+        if [ $waited -eq 0 ]; then
+            gum log --level info "Várakozás az összes VPN csatlakozására..."
+        fi
+        sleep 5
+        waited=$((waited + 5))
+    done
+
+    if [ $waited -ge $max_wait ]; then
+        gum log --level warn "Timeout — nem sikerült minden VPN-t csatlakoztatni"
+        gum log --level info "  Tailscale: $(ts_status)"
+        gum log --level info "  AWS VPN: $(aws_vpn_status)"
+        $SKIP_WG || gum log --level info "  WatchGuard: $(wg_status)"
+        failed=1
+    fi
 fi
 
 echo ""
