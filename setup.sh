@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # OFSZ Tooling — meta-installer
-# Usage:
-#   Local repo:  ./setup.sh
-#   Remote:      curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/<hash>/setup.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/<hash>/setup.sh | bash
 #
 # The { ... } block ensures bash reads the entire script before executing,
 # preventing brew/curl output from interleaving with the script when piped.
@@ -10,17 +8,8 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/sarimarton-ofsz/ofsz-tooling.git"
+INSTALL_DIR="$HOME/.local/share/ofsz-tooling"
 DATA_DIR="$HOME/.config/ofsz-tooling"
-
-# Detect if running from a local repo checkout
-_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)" || true
-if [ -n "$_script_dir" ] && [ -f "$_script_dir/vpn/vpn" ]; then
-    INSTALL_DIR="$_script_dir"
-    _local_repo=true
-else
-    INSTALL_DIR="$HOME/.local/share/ofsz-tooling"
-    _local_repo=false
-fi
 
 # ── Ensure Homebrew is available ──────────────────────────
 if ! command -v brew &>/dev/null; then
@@ -52,26 +41,22 @@ header "OFSZ Tooling Installer"
 
 mkdir -p "$DATA_DIR"
 
-if $_local_repo; then
-    gum log --level info --prefix "✓" "Using local repo: $INSTALL_DIR"
+if [ -d "$INSTALL_DIR/.git" ]; then
+    pull_output=$(git -C "$INSTALL_DIR" pull --ff-only 2>&1) || {
+        gum log --level warn "git pull failed — resetting to remote"
+        git -C "$INSTALL_DIR" stash --quiet 2>/dev/null || true
+        git -C "$INSTALL_DIR" pull --ff-only --quiet
+    }
+    gum log --level info --prefix "✓" "Repository updated"
 else
-    if [ -d "$INSTALL_DIR/.git" ]; then
-        pull_output=$(git -C "$INSTALL_DIR" pull --ff-only 2>&1) || {
-            gum log --level warn "git pull failed — resetting to remote"
-            git -C "$INSTALL_DIR" stash --quiet 2>/dev/null || true
-            git -C "$INSTALL_DIR" pull --ff-only --quiet
-        }
-        gum log --level info --prefix "✓" "Repository updated"
-    else
-        if [ -d "$INSTALL_DIR" ]; then
-            gum log --level warn "Backing up existing $INSTALL_DIR"
-            mv "$INSTALL_DIR" "${INSTALL_DIR}.bak.$(date +%s)"
-        fi
-        mkdir -p "$(dirname "$INSTALL_DIR")"
-        gum spin --spinner dot --title "Cloning repository..." -- \
-            git clone "$REPO_URL" "$INSTALL_DIR"
-        gum log --level info --prefix "✓" "Repository cloned to $INSTALL_DIR"
+    if [ -d "$INSTALL_DIR" ]; then
+        gum log --level warn "Backing up existing $INSTALL_DIR"
+        mv "$INSTALL_DIR" "${INSTALL_DIR}.bak.$(date +%s)"
     fi
+    mkdir -p "$(dirname "$INSTALL_DIR")"
+    gum spin --spinner dot --title "Cloning repository..." -- \
+        git clone "$REPO_URL" "$INSTALL_DIR"
+    gum log --level info --prefix "✓" "Repository cloned to $INSTALL_DIR"
 fi
 
 # Record dependencies we installed (for clean uninstall)
