@@ -152,20 +152,20 @@ else
 fi
 
 # ── 7. Playwright (headless Chromium for SAML auth) ──────
-if [ -f "$TOOL_DIR/node_modules/.package-lock.json" ] && [ -d "$TOOL_DIR/node_modules/playwright" ]; then
-    gum log --level info --prefix "✓" "Playwright: installed"
-else
-    if ! command -v node &>/dev/null; then
-        gum log --level info "Node.js not found — installing..."
-        brew install node
-        _mark_dep node
-    fi
+if ! command -v node &>/dev/null; then
+    gum log --level info "Node.js not found — installing..."
+    brew install node
+    _mark_dep node
+fi
+if [ ! -d "$TOOL_DIR/node_modules/playwright" ]; then
     gum log --level info "Playwright: installing..."
     (cd "$TOOL_DIR" && npm install --save playwright 2>&1 | tail -1)
+fi
+if ! ls -d "$TOOL_DIR/run/browsers/chromium-"* &>/dev/null; then
     gum log --level info "Chromium: downloading..."
     (cd "$TOOL_DIR" && PLAYWRIGHT_BROWSERS_PATH="$TOOL_DIR/run/browsers" npx playwright install chromium 2>&1 | tail -1)
-    gum log --level info --prefix "✓" "Playwright + Chromium: installed"
 fi
+gum log --level info --prefix "✓" "Playwright + Chromium: ready"
 
 # ── 8. AWS VPN Client ────────────────────────────────────
 if [ -x "$OVPN_BIN" ]; then
