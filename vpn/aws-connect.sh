@@ -25,6 +25,7 @@ AWS_CONFIG_DIR="$HOME/.config/AWSVPNClient"
 PROFILES_FILE="$AWS_CONFIG_DIR/ConnectionProfiles"
 RUNTIME_DIR="$SCRIPT_DIR/run"
 mkdir -p "$RUNTIME_DIR"
+export PLAYWRIGHT_BROWSERS_PATH="$RUNTIME_DIR/browsers"
 SAML_RESPONSE_FILE="$RUNTIME_DIR/saml-response"
 OVPN_LOG="$RUNTIME_DIR/openvpn.log"
 OVPN_PID_FILE="$RUNTIME_DIR/openvpn.pid"
@@ -68,11 +69,12 @@ preflight_check() {
         }
     fi
 
-    # 4. Python 3 available? (for SAML capture server)
-    if ! command -v python3 &>/dev/null; then
-        err "python3 not found"
-        err "  Required for SAML auth capture server"
-        err "  macOS should have it — try: xcode-select --install"
+    # 4. Node.js + Playwright
+    if ! command -v node &>/dev/null; then
+        err "Node.js hiányzik — telepítsd újra a toolkitet"
+        failed=1
+    elif [ ! -d "$SCRIPT_DIR/node_modules/playwright" ]; then
+        err "Playwright hiányzik — telepítsd újra a toolkitet"
         failed=1
     fi
 
@@ -172,13 +174,12 @@ do_connect() {
 
     rm -f "$SAML_RESPONSE_FILE"
 
-    local pw_node="$SCRIPT_DIR/node_modules/.bin/playwright"
     local pw_state="$RUNTIME_DIR/pw-state.json"
+    local saml_response
 
     # Try headless first if we have a saved session
     if [ -f "$pw_state" ]; then
         log "Headless SAML (mentett session)..."
-        local saml_response
         if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" saml "$saml_url" "$pw_state" 2>/dev/null); then
             ok "SAML response captured (headless)!"
             echo "$saml_response" > "$SAML_RESPONSE_FILE"
@@ -187,14 +188,10 @@ do_connect() {
         fi
     fi
 
-    # Fallback: interactive login with headed browser
+    # Fallback: interactive login + SAML capture in one browser session
     if [ ! -s "$SAML_RESPONSE_FILE" ]; then
         log "Interaktív Entra login..."
-        # First do interactive login to save/refresh session state
-        node "$SCRIPT_DIR/pw-saml.mjs" login "$pw_state"
-        # Now retry SAML capture with the fresh session
-        local saml_response
-        if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" saml "$saml_url" "$pw_state" 2>/dev/null); then
+        if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" login "$saml_url" "$pw_state"); then
             ok "SAML response captured!"
             echo "$saml_response" > "$SAML_RESPONSE_FILE"
         fi
@@ -205,7 +202,6 @@ do_connect() {
         return 1
     fi
 
-    local saml_response
     saml_response=$(cat "$SAML_RESPONSE_FILE")
 
     # Phase 2: VPN connection (sudo needed for tun device)

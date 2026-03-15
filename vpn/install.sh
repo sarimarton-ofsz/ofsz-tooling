@@ -87,6 +87,21 @@ if ! $SKIP_WG; then
     fi
 fi
 
+# ── Prerequisite notice ──────────────────────────────────
+echo ""
+gum style --bold --foreground 212 "Előfeltételek"
+echo ""
+gum style --faint "A telepítő feltételezi, hogy minden VPN már be van állítva és működik:" \
+    "" \
+    "  • Tailscale — telepítve és bejelentkezve" \
+    "  • AWS VPN Client — telepítve, profil konfigurálva (legalább 1 GUI-s csatlakozás)" \
+    "$( [ "$SKIP_WG" = "false" ] && echo '  • WatchGuard — futó kliens a céges jelszóval' || true )"
+echo ""
+if ! gum confirm "Megerősítem, ezek működnek" --default=yes --affirmative "Megerősítem" --negative "Mégsem"; then
+    gum log --level warn "Telepítés megszakítva — állítsd be a VPN-eket és futtasd újra"
+    return 1 2>/dev/null || exit 1
+fi
+
 # ── 4. SwiftBar: auto-install + symlink ──────────────────
 # Placed after config write so SwiftBar reads WG_ENABLED correctly on first poll.
 SWIFTBAR_SRC="$TOOL_DIR/vpn.30s.sh"
@@ -148,7 +163,7 @@ else
     gum log --level info "Playwright: installing..."
     (cd "$TOOL_DIR" && npm install --save playwright 2>&1 | tail -1)
     gum log --level info "Chromium: downloading..."
-    (cd "$TOOL_DIR" && npx playwright install chromium 2>&1 | tail -1)
+    (cd "$TOOL_DIR" && PLAYWRIGHT_BROWSERS_PATH="$TOOL_DIR/run/browsers" npx playwright install chromium 2>&1 | tail -1)
     gum log --level info --prefix "✓" "Playwright + Chromium: installed"
 fi
 
