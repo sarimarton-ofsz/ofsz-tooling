@@ -136,14 +136,20 @@ else
     warn_prereq "Tailscale: not installed → https://tailscale.com/download/mac"
 fi
 
-# ── 7. Google Chrome ─────────────────────────────────────
-if [ -d "/Applications/Google Chrome.app" ]; then
-    gum log --level info --prefix "✓" "Google Chrome: installed"
+# ── 7. Playwright (headless Chromium for SAML auth) ──────
+if [ -f "$TOOL_DIR/node_modules/.package-lock.json" ] && [ -d "$TOOL_DIR/node_modules/playwright" ]; then
+    gum log --level info --prefix "✓" "Playwright: installed"
 else
-    gum log --level info "Google Chrome not found — installing..."
-    brew install --cask google-chrome
-    _mark_dep google-chrome
-    gum log --level info --prefix "✓" "Google Chrome: installed"
+    if ! command -v node &>/dev/null; then
+        gum log --level info "Node.js not found — installing..."
+        brew install node
+        _mark_dep node
+    fi
+    gum log --level info "Playwright: installing..."
+    (cd "$TOOL_DIR" && npm install --save playwright 2>&1 | tail -1)
+    gum log --level info "Chromium: downloading..."
+    (cd "$TOOL_DIR" && npx playwright install chromium 2>&1 | tail -1)
+    gum log --level info --prefix "✓" "Playwright + Chromium: installed"
 fi
 
 # ── 8. AWS VPN Client ────────────────────────────────────
@@ -203,10 +209,8 @@ if [ $failed -eq 0 ]; then
         ts_up || { gum log --level warn "Tailscale: failed"; failed=1; }
     fi
 
-    # AWS VPN — always (re)connect via CLI with dedicated Chrome profile
-    # This ensures the Entra SSO cookie is stored in our OFSZ-VPN profile
-    # for future auto-reconnects. Even if already connected (e.g. via GUI),
-    # we reconnect to seed the cookie in the right profile.
+    # AWS VPN — connect via CLI; Playwright handles Entra SAML auth.
+    # First connect saves session state for future headless auto-reconnects.
     echo ""
     gum style --bold --foreground 212 "AWS VPN — Entra ID bejelentkezés"
     echo ""

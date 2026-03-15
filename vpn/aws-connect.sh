@@ -35,37 +35,6 @@ ok()   { echo -e "${GREEN}[aws-vpn ✓]${NC} $*" >&2; }
 warn() { echo -e "${YELLOW}[aws-vpn !]${NC} $*" >&2; }
 err()  { echo -e "${RED}[aws-vpn ✗]${NC} $*" >&2; }
 
-# ── Browser tab management ───────────────────────────────────────
-close_saml_tab() {
-    # Close Chrome tab
-    osascript <<'APPLESCRIPT' 2>/dev/null || true
-tell application "Google Chrome"
-    repeat with w in windows
-        repeat with t in tabs of w
-            set tabURL to URL of t
-            if tabURL contains "127.0.0.1:35001" or tabURL contains "microsoftonline.com" then
-                close t
-                return
-            end if
-        end repeat
-    end repeat
-end tell
-APPLESCRIPT
-    # Also close Safari tab (fallback case)
-    osascript <<'APPLESCRIPT' 2>/dev/null || true
-tell application "Safari"
-    repeat with w in windows
-        repeat with t in tabs of w
-            set tabURL to URL of t
-            if tabURL contains "127.0.0.1:35001" or tabURL contains "microsoftonline.com" then
-                close t
-                return
-            end if
-        end repeat
-    end repeat
-end tell
-APPLESCRIPT
-}
 
 # ── Preflight checks ─────────────────────────────────────────────
 # Validates all prerequisites before attempting connection.
@@ -203,54 +172,36 @@ do_connect() {
 
     rm -f "$SAML_RESPONSE_FILE"
 
-    # Kill any leftover SAML server from a previous run
-    lsof -ti :35001 2>/dev/null | xargs kill 2>/dev/null || true
+    local pw_node="$SCRIPT_DIR/node_modules/.bin/playwright"
+    local pw_state="$RUNTIME_DIR/pw-state.json"
 
-    # Start SAML capture server (user-level, port 35001)
-    log "Starting SAML capture server on :35001..."
-    SAML_RESPONSE_FILE="$SAML_RESPONSE_FILE" \
-        python3 "$SCRIPT_DIR/aws-saml-server.py" &
-    local server_pid=$!
-
-    # Open browser for Entra ID auth (background — don't steal focus)
-    # Chrome is preferred: it treats 127.0.0.1 as a secure context, so the
-    # HTTPS→HTTP form POST from Entra ID goes through without a blocking alert.
-    # Safari shows an "insecure form submission" sheet that requires manual dismiss.
-    log "Opening browser for Entra ID auth..."
-    # Open SAML URL in user's default Chrome (session cookies are already there).
-    # open -g opens in background to avoid focus steal.
-    if [ -d "/Applications/Google Chrome.app" ]; then
-        open -g -a "Google Chrome" "$saml_url"
-        SAML_BROWSER="chrome"
-    else
-        warn "Chrome not found, falling back to Safari (may need manual alert dismiss)"
-        open -g "$saml_url"
-        SAML_BROWSER="safari"
+    # Try headless first if we have a saved session
+    if [ -f "$pw_state" ]; then
+        log "Headless SAML (mentett session)..."
+        local saml_response
+        if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" saml "$saml_url" "$pw_state" 2>/dev/null); then
+            ok "SAML response captured (headless)!"
+            echo "$saml_response" > "$SAML_RESPONSE_FILE"
+        else
+            warn "Headless SAML sikertelen — interaktív login szükséges"
+        fi
     fi
 
-    # Wait for SAML response (Python server captures the POST from browser)
-    log "Varakozas bejelentkezesre a Chrome ablakban..."
-    local i=0
-    while [ $i -lt 120 ]; do
-        if [ -f "$SAML_RESPONSE_FILE" ] && [ -s "$SAML_RESPONSE_FILE" ]; then
+    # Fallback: interactive login with headed browser
+    if [ ! -s "$SAML_RESPONSE_FILE" ]; then
+        log "Interaktív Entra login..."
+        # First do interactive login to save/refresh session state
+        node "$SCRIPT_DIR/pw-saml.mjs" login "$pw_state"
+        # Now retry SAML capture with the fresh session
+        local saml_response
+        if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" saml "$saml_url" "$pw_state" 2>/dev/null); then
             ok "SAML response captured!"
-            break
+            echo "$saml_response" > "$SAML_RESPONSE_FILE"
         fi
-        sleep 1
-        i=$((i + 1))
-    done
-
-    kill "$server_pid" 2>/dev/null || true
-    wait "$server_pid" 2>/dev/null || true
-
-    # Keep VPN Chrome alive — Entra session cookies only persist while Chrome
-    # is running (KMSI disabled by tenant, only session cookies available).
-    # Killing Chrome = next auto-reconnect can't reuse the session.
-    # close_saml_tab is enough to clean up the visible tab.
-    close_saml_tab
+    fi
 
     if [ ! -s "$SAML_RESPONSE_FILE" ]; then
-        err "SAML auth timeout (120s)"
+        err "SAML auth sikertelen"
         return 1
     fi
 
