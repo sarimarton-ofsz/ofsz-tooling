@@ -4,9 +4,12 @@
 
 set -euo pipefail
 
+# ── Paths ──────────────────────────────────────────────────────────
+DATA_DIR="$HOME/.config/ofsz-tooling/vpn"
+
 # ── Config ──────────────────────────────────────────────────────────
 WG_ENABLED=true
-CONFIG_FILE="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}/config"
+CONFIG_FILE="$DATA_DIR/config"
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 
 # ── Colors ──────────────────────────────────────────────────────────
@@ -91,8 +94,8 @@ ts_watchdog_stop() {
 
 # ── AWS VPN Client ──────────────────────────────────────────────────
 # Uses aws-connect.sh (CLI openvpn + SAML capture) instead of the GUI app.
-AWS_VPN_PID_FILE="$SCRIPT_DIR/run/openvpn.pid"
-AWS_VPN_RECONNECT_FLAG="$SCRIPT_DIR/run/aws-auto-reconnect"
+AWS_VPN_PID_FILE="$DATA_DIR/run/openvpn.pid"
+AWS_VPN_RECONNECT_FLAG="$DATA_DIR/run/aws-auto-reconnect"
 
 aws_vpn_status() {
     # Check CLI-based VPN (process runs as root — use ps, not kill -0)
@@ -124,7 +127,7 @@ aws_vpn_up() {
     if [ "$(aws_vpn_status)" = "connected" ]; then
         ok "AWS VPN: already connected"
         touch "$AWS_VPN_RECONNECT_FLAG"
-        rm -f "$SCRIPT_DIR/run/reconnect-failures"
+        rm -f "$DATA_DIR/run/reconnect-failures"
         return 0
     fi
 
@@ -143,7 +146,7 @@ aws_vpn_up() {
     log "AWS VPN: connecting via CLI (SAML)..."
     if "$SCRIPT_DIR/aws-connect.sh" up; then
         touch "$AWS_VPN_RECONNECT_FLAG"
-        rm -f "$SCRIPT_DIR/run/reconnect-failures"
+        rm -f "$DATA_DIR/run/reconnect-failures"
         if $ts_was_up; then
             ts_watchdog_stop
             log "Restoring Tailscale..."

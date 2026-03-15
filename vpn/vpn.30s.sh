@@ -9,8 +9,11 @@
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
+# SCRIPT_DIR: where scripts live (resolved via symlink from SwiftBar)
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || readlink "$0" 2>/dev/null || echo "$0")")" && pwd)"
+# VPN_DIR: where runtime data lives
 VPN_DIR="$HOME/.config/ofsz-tooling/vpn"
-VPN="$VPN_DIR/vpn"
+VPN="$SCRIPT_DIR/vpn"
 TS_CLI="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 
 # ── Config ──────────────────────────────────────────────────

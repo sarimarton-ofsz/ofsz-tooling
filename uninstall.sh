@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # OFSZ Tooling — meta-uninstaller
-# Usage: bash ~/.config/ofsz-tooling/uninstall.sh
+# Usage: bash uninstall.sh  (from repo root or ~/.local/share/ofsz-tooling)
 set -euo pipefail
 
-INSTALL_DIR="$HOME/.config/ofsz-tooling"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DATA_DIR="$HOME/.config/ofsz-tooling"
+SHARE_DIR="$HOME/.local/share/ofsz-tooling"
 
 if ! command -v gum &>/dev/null; then
     echo "gum is required. Install: brew install gum"
@@ -22,11 +24,11 @@ mod_dirs=()
 mod_names=()
 mod_descs=()
 
-for uninstaller in "$INSTALL_DIR"/*/uninstall.sh; do
+for uninstaller in "$SCRIPT_DIR"/*/uninstall.sh; do
     [ -f "$uninstaller" ] || continue
     mod="$(basename "$(dirname "$uninstaller")")"
     mod_dirs+=("$mod")
-    desc_file="$INSTALL_DIR/$mod/.description"
+    desc_file="$SCRIPT_DIR/$mod/.description"
     if [ -f "$desc_file" ]; then
         mod_names+=("$(sed -n '1p' "$desc_file")")
         mod_descs+=("$(sed -n '2p' "$desc_file")")
@@ -37,8 +39,9 @@ for uninstaller in "$INSTALL_DIR"/*/uninstall.sh; do
 done
 
 if [ ${#mod_dirs[@]} -eq 0 ]; then
-    gum log --level info "Nincs telepített modul — repo törlése..."
-    rm -rf "$INSTALL_DIR"
+    gum log --level info "Nincs telepített modul — adatok törlése..."
+    rm -rf "$DATA_DIR"
+    [ -d "$SHARE_DIR" ] && rm -rf "$SHARE_DIR"
     echo "✓ Törölve."
     exit 0
 fi
@@ -72,7 +75,7 @@ while IFS= read -r sel; do
     for i in "${!choices[@]}"; do
         if [ "${choices[$i]}" = "$sel" ]; then
             header "Uninstalling: ${mod_names[$i]}"
-            bash "$INSTALL_DIR/${mod_dirs[$i]}/uninstall.sh" || true
+            bash "$SCRIPT_DIR/${mod_dirs[$i]}/uninstall.sh" || true
             ((removed++)) || true
             break
         fi
@@ -83,15 +86,13 @@ done <<< "$selected"
 if [ "$removed" -lt "$total" ]; then
     echo ""
     gum style --border double --border-foreground 76 --padding "0 2" --bold \
-        "✓ Kiválasztott modulok eltávolítva" \
-        "" \
-        "Repo megmaradt: $INSTALL_DIR"
+        "✓ Kiválasztott modulok eltávolítva"
     echo ""
     exit 0
 fi
 
 # Remove brew dependencies we installed (tracked in .installed-deps)
-DEPS_FILE="$INSTALL_DIR/.installed-deps"
+DEPS_FILE="$DATA_DIR/.installed-deps"
 remove_gum=false
 if [ -f "$DEPS_FILE" ]; then
     while IFS= read -r dep; do
@@ -117,9 +118,15 @@ if [ -f "$DEPS_FILE" ]; then
     done < "$DEPS_FILE"
 fi
 
-rm -rf "$INSTALL_DIR"
-echo ""
-echo "✓ $INSTALL_DIR törölve"
+# Clean up data directory
+rm -rf "$DATA_DIR"
+echo "✓ $DATA_DIR törölve"
+
+# Clean up clone directory (curl-based install) — only if not the current repo
+if [ -d "$SHARE_DIR" ]; then
+    rm -rf "$SHARE_DIR"
+    echo "✓ $SHARE_DIR törölve"
+fi
 
 if $remove_gum; then
     brew uninstall gum 2>/dev/null || true

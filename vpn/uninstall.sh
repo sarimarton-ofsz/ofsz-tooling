@@ -3,7 +3,7 @@
 # Can also be run standalone: bash vpn/uninstall.sh
 set -euo pipefail
 
-TOOL_DIR="$(cd "$(dirname "$0")" && pwd)"
+DATA_DIR="$HOME/.config/ofsz-tooling/vpn"
 SWIFTBAR_LINK="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || echo "$HOME/Library/Application Support/SwiftBar/Plugins")/vpn.30s.sh"
 SUDOERS_FILE="/etc/sudoers.d/vpn-aws"
 
@@ -31,9 +31,9 @@ fi
 
 # ── 1. Remove PATH from shell rc ────────────────────────
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
-    if [ -f "$rc" ] && grep -qF '.config/ofsz-tooling/vpn' "$rc" 2>/dev/null; then
+    if [ -f "$rc" ] && grep -qF '# OFSZ VPN toolkit' "$rc" 2>/dev/null; then
         sed -i '' '/# OFSZ VPN toolkit/d' "$rc"
-        sed -i '' '/\.config\/ofsz-tooling\/vpn/d' "$rc"
+        sed -i '' '/ofsz-tooling\/vpn/d' "$rc"
         gum log --level info --prefix "✓" "PATH removed from $rc"
     fi
 done
@@ -62,11 +62,14 @@ else
     gum log --level info --prefix "·" "WatchGuard password: already removed"
 fi
 
-# ── 5. Kill isolated VPN Chrome ──────────────────────
-pkill -f "user-data-dir=$TOOL_DIR/run/chrome-data" 2>/dev/null || true
+# ── 5. Remove runtime data ───────────────────────────
+if [ -d "$DATA_DIR/run" ]; then
+    rm -rf "$DATA_DIR/run"
+    gum log --level info --prefix "✓" "Runtime dir removed"
+fi
 
-# ── 6. Remove runtime dir (preserve chrome-data for SSO cookie) ──
-if [ -d "$TOOL_DIR/run" ]; then
-    find "$TOOL_DIR/run" -maxdepth 1 ! -name run ! -name chrome-data -exec rm -rf {} + 2>/dev/null
-    gum log --level info --prefix "✓" "Runtime dir cleaned (SSO cookie preserved)"
+# ── 6. Remove config ────────────────────────────────
+if [ -f "$DATA_DIR/config" ]; then
+    rm -f "$DATA_DIR/config"
+    gum log --level info --prefix "✓" "Config removed"
 fi

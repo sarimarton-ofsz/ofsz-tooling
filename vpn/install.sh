@@ -4,6 +4,7 @@
 set -euo pipefail
 
 TOOL_DIR="$(cd "$(dirname "$0")" && pwd)"
+DATA_DIR="$HOME/.config/ofsz-tooling/vpn"
 SWIFTBAR_PLUGINS="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || echo "$HOME/Library/Application Support/SwiftBar/Plugins")"
 OVPN_BIN="/Applications/AWS VPN Client/AWS VPN Client.app/Contents/Resources/openvpn/acvc-openvpn"
 
@@ -14,7 +15,7 @@ if ! command -v gum &>/dev/null; then
 fi
 
 # Dependency tracker (shared with root uninstall.sh)
-DEPS_FILE="$(dirname "$TOOL_DIR")/.installed-deps"
+DEPS_FILE="$HOME/.config/ofsz-tooling/.installed-deps"
 [ -f "$DEPS_FILE" ] || touch "$DEPS_FILE"
 _mark_dep() { grep -qx "$1" "$DEPS_FILE" 2>/dev/null || echo "$1" >> "$DEPS_FILE"; }
 
@@ -27,9 +28,10 @@ warn_prereq() {
 # ── 1. Permissions & runtime dir ─────────────────────────
 chmod +x "$TOOL_DIR/vpn" "$TOOL_DIR/aws-connect.sh" "$TOOL_DIR/lib.sh"
 chmod +x "$TOOL_DIR/vpn.30s.sh"
-mkdir -p "$TOOL_DIR/run"
+mkdir -p "$DATA_DIR/run"
 
-gum log --level info --prefix "✓" "VPN toolkit ready at $TOOL_DIR"
+gum log --level info --prefix "✓" "VPN scripts at $TOOL_DIR"
+gum log --level info --prefix "✓" "VPN data at $DATA_DIR"
 
 # ── 2. Add vpn to PATH ──────────────────────────────────
 SHELL_RC=""
@@ -39,9 +41,9 @@ elif [ -f "$HOME/.bashrc" ]; then
     SHELL_RC="$HOME/.bashrc"
 fi
 
-PATH_LINE="export PATH=\"\$HOME/.config/ofsz-tooling/vpn:\$PATH\""
+PATH_LINE="export PATH=\"$TOOL_DIR:\$PATH\""
 if [ -n "$SHELL_RC" ]; then
-    if ! grep -qF '.config/ofsz-tooling/vpn' "$SHELL_RC" 2>/dev/null; then
+    if ! grep -qF '# OFSZ VPN toolkit' "$SHELL_RC" 2>/dev/null; then
         {
             echo ""
             echo "# OFSZ VPN toolkit"
@@ -63,7 +65,7 @@ if ! gum confirm "WatchGuard VPN beállítása?" --default=yes; then
     gum log --level info --prefix "–" "WatchGuard: skipped"
 fi
 
-echo "WG_ENABLED=$( $SKIP_WG && echo false || echo true )" > "$TOOL_DIR/config"
+echo "WG_ENABLED=$( $SKIP_WG && echo false || echo true )" > "$DATA_DIR/config"
 
 if ! $SKIP_WG; then
     if pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
@@ -161,9 +163,9 @@ if [ ! -d "$TOOL_DIR/node_modules/playwright" ]; then
     gum log --level info "Playwright: installing..."
     (cd "$TOOL_DIR" && npm install --save playwright 2>&1 | tail -1)
 fi
-if ! ls -d "$TOOL_DIR/run/browsers/chromium-"* &>/dev/null; then
+if ! ls -d "$DATA_DIR/run/browsers/chromium-"* &>/dev/null; then
     gum log --level info "Chromium: downloading..."
-    (cd "$TOOL_DIR" && PLAYWRIGHT_BROWSERS_PATH="$TOOL_DIR/run/browsers" npx playwright install chromium 2>&1 | tail -1)
+    (cd "$TOOL_DIR" && PLAYWRIGHT_BROWSERS_PATH="$DATA_DIR/run/browsers" npx playwright install chromium 2>&1 | tail -1)
 fi
 gum log --level info --prefix "✓" "Playwright + Chromium: ready"
 
