@@ -212,15 +212,19 @@ wg_store_password() {
 }
 
 wg_status() {
-    # Returns: connected | disconnected | connecting | unknown
+    # Returns: connected | disconnected | connecting | not-running
+    if ! pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
+        echo "not-running"
+        return
+    fi
     local statusbar
-    statusbar=$(osascript -e "$WG_STATUS_APPLESCRIPT" 2>/dev/null) || { echo "unknown"; return; }
+    statusbar=$(osascript -e "$WG_STATUS_APPLESCRIPT" 2>/dev/null) || { echo "not-running"; return; }
 
     case "$statusbar" in
         *"Not Connected"*) echo "disconnected" ;;
         *"Connected"*)     echo "connected" ;;
         *"Connecting"*)    echo "connecting" ;;
-        *)                 echo "unknown" ;;
+        *)                 echo "disconnected" ;;
     esac
 }
 
@@ -238,6 +242,27 @@ wg_up() {
         err "WatchGuard: no password found in keychain"
         err "Run: vpn wg-set-password to store it first"
         return 1
+    fi
+
+    # Launch WatchGuard if not running
+    if [ "$current" = "not-running" ]; then
+        log "WatchGuard: launching app..."
+        open -a "WatchGuard Mobile VPN with SSL" 2>/dev/null || {
+            err "WatchGuard: app not found"
+            return 1
+        }
+        # Wait for menubar process to appear
+        local w=0
+        while [ $w -lt 15 ]; do
+            if pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then break; fi
+            sleep 1
+            w=$((w + 1))
+        done
+        if ! pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
+            err "WatchGuard: app failed to start"
+            return 1
+        fi
+        sleep 2  # let menubar settle
     fi
 
     log "WatchGuard: connecting (with password from keychain)..."
@@ -282,7 +307,7 @@ end tell' 2>/dev/null
 wg_down() {
     local current
     current=$(wg_status)
-    if [ "$current" = "disconnected" ]; then
+    if [ "$current" = "disconnected" ] || [ "$current" = "not-running" ]; then
         ok "WatchGuard: already disconnected"
         return 0
     fi
@@ -292,7 +317,8 @@ wg_down() {
 
     local i=0
     while [ $i -lt 15 ]; do
-        if [ "$(wg_status)" = "disconnected" ]; then
+        current=$(wg_status)
+        if [ "$current" = "disconnected" ] || [ "$current" = "not-running" ]; then
             ok "WatchGuard: disconnected"
             return 0
         fi

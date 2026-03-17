@@ -41,6 +41,10 @@ fast_aws_status() {
 }
 
 fast_wg_status() {
+    if ! pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
+        echo "not-running"
+        return
+    fi
     local ts_iface aws_iface exclude
     ts_iface=$(netstat -rn -f inet 2>/dev/null | awk '/100\.64\/10.*utun/{print $NF}')
     aws_iface=$(grep -o 'utun[0-9]*' "$VPN_DIR/run/openvpn.log" 2>/dev/null | tail -1)
@@ -49,10 +53,8 @@ fast_wg_status() {
     if netstat -rn -f inet 2>/dev/null | grep utun | grep -vE "$exclude" \
          | grep -qE "^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)"; then
         echo "connected"
-    elif pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
-        echo "disconnected"
     else
-        echo "unknown"
+        echo "disconnected"
     fi
 }
 
@@ -128,10 +130,11 @@ fi
 status_color() {
     case "$1" in
         connected)              echo "#33CC33" ;;
-        disconnected|stopped)   echo "#FF3B30" ;;
+        disconnected|stopped)    echo "#FF3B30" ;;
         connecting|reconnecting) echo "#E6B310" ;;
-        no-sudo)                echo "#FF6B00" ;;
-        *)                      echo "#888888" ;;
+        no-sudo)                 echo "#FF6B00" ;;
+        not-running)             echo "#888888" ;;
+        *)                       echo "#888888" ;;
     esac
 }
 
