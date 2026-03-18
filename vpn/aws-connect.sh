@@ -208,9 +208,8 @@ do_connect() {
     # Phase 2: VPN connection (sudo needed for tun device)
     log "VPN tunnel felépítése..."
     # Pre-create log+pid as user (writable by root via 666) so we can read them later
-    rm -f "$OVPN_LOG" "$OVPN_PID_FILE" 2>/dev/null || true
-    : > "$OVPN_LOG"
-    : > "$OVPN_PID_FILE"
+    rm -f "$OVPN_PID_FILE" 2>/dev/null || true
+    touch "$OVPN_LOG" "$OVPN_PID_FILE"
     chmod 666 "$OVPN_LOG" "$OVPN_PID_FILE"
 
     # sudo can't access <() process substitution fds — use a temp file
