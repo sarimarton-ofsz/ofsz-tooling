@@ -72,9 +72,9 @@ else
     pw=$(gum input --password --placeholder "jelszó" --header "Céges jelszó:")
     if [ -n "$email" ] && [ -n "$pw" ]; then
         security delete-generic-password -s "vpn-entra" 2>/dev/null || true
-        security add-generic-password -s "vpn-entra" -a "email" -w "$email" -T ""
+        security add-generic-password -s "vpn-entra" -a "email" -w "$email" -T /usr/bin/security
         security delete-generic-password -s "vpn-watchguard" 2>/dev/null || true
-        security add-generic-password -s "vpn-watchguard" -a "watchguard" -w "$pw" -T ""
+        security add-generic-password -s "vpn-watchguard" -a "watchguard" -w "$pw" -T /usr/bin/security
         gum log --level info --prefix "✓" "Credentials stored in keychain"
     else
         warn_prereq "Credentials: not stored (empty input)"
@@ -240,14 +240,8 @@ if [ $failed -eq 0 ]; then
     # First connect saves session state for future headless auto-reconnects.
     echo ""
     gum style --bold --foreground 212 "AWS VPN — Entra ID bejelentkezés"
-    echo ""
-    if gum confirm "Indítás? (Eltarthat néhány másodpercig)" --default=yes --affirmative "Mehet" --negative "Mégse"; then
-        aws_vpn_down 2>/dev/null || true
-        aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
-    else
-        gum log --level warn "AWS VPN: skipped"
-        failed=1
-    fi
+    aws_vpn_down 2>/dev/null || true
+    aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
 
     # WatchGuard
     if ! $SKIP_WG; then

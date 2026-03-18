@@ -207,7 +207,7 @@ wg_store_password() {
     # Usage: wg_store_password <password>
     local pw="$1"
     security delete-generic-password -s "$WG_KEYCHAIN_SERVICE" 2>/dev/null || true
-    security add-generic-password -s "$WG_KEYCHAIN_SERVICE" -a "watchguard" -w "$pw" -T "" 2>/dev/null
+    security add-generic-password -s "$WG_KEYCHAIN_SERVICE" -a "watchguard" -w "$pw" -T /usr/bin/security 2>/dev/null
     ok "WatchGuard: password stored in keychain ($WG_KEYCHAIN_SERVICE)"
 }
 
