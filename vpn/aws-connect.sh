@@ -121,7 +121,7 @@ print(profiles[0]['OvpnConfigFilePath'])
 get_saml_info() {
     local ovpn_config="$1"
 
-    log "Csatlakozás az AWS szerverhez — ez kb. 2 percig tart, várj türelemmel..."
+    log "Csatlakozás az AWS szerverhez..."
 
     # openvpn connects, gets AUTH_FAILED with CRV1 response — no tun device needed
     # Response format: AUTH_FAILED,CRV1:R:<SID>:<extra>:<SAML_URL>
@@ -189,12 +189,28 @@ do_connect() {
         fi
     fi
 
-    # Fallback: interactive login + SAML capture in one browser session
+    # Fallback: automated login with keychain credentials, or interactive
     if [ ! -s "$SAML_RESPONSE_FILE" ]; then
-        log "Interaktív Entra login..."
-        if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" login "$saml_url" "$pw_state"); then
-            ok "SAML response captured!"
-            echo "$saml_response" > "$SAML_RESPONSE_FILE"
+        local email password
+        email=$(security find-generic-password -s "vpn-entra" -a "email" -w 2>/dev/null) || true
+        password=$(security find-generic-password -s "vpn-watchguard" -w 2>/dev/null) || true
+
+        if [ -n "$email" ] && [ -n "$password" ]; then
+            log "Automatikus Entra login..."
+            if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" login "$saml_url" "$pw_state" "$email" "$password" 2>/dev/null); then
+                ok "SAML response captured!"
+                echo "$saml_response" > "$SAML_RESPONSE_FILE"
+            else
+                warn "Automatikus login sikertelen — interaktív fallback"
+            fi
+        fi
+
+        if [ ! -s "$SAML_RESPONSE_FILE" ]; then
+            log "Interaktív Entra login..."
+            if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" login "$saml_url" "$pw_state"); then
+                ok "SAML response captured!"
+                echo "$saml_response" > "$SAML_RESPONSE_FILE"
+            fi
         fi
     fi
 

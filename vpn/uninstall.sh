@@ -54,12 +54,18 @@ else
     gum log --level info --prefix "·" "Sudoers config: already removed"
 fi
 
-# ── 4. Remove WatchGuard password from keychain ─────────
+# ── 4. Remove credentials from keychain ──────────────────
 if security find-generic-password -s "vpn-watchguard" -w &>/dev/null; then
     security delete-generic-password -s "vpn-watchguard" &>/dev/null
     gum log --level info --prefix "✓" "WatchGuard password removed from keychain"
 else
     gum log --level info --prefix "·" "WatchGuard password: already removed"
+fi
+if security find-generic-password -s "vpn-entra" -a "email" -w &>/dev/null; then
+    security delete-generic-password -s "vpn-entra" &>/dev/null
+    gum log --level info --prefix "✓" "Entra email removed from keychain"
+else
+    gum log --level info --prefix "·" "Entra email: already removed"
 fi
 
 # ── 5. Remove runtime data ───────────────────────────

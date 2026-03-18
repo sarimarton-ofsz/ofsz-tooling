@@ -42,22 +42,43 @@ async function extractSamlFromPage(page) {
   } catch { return null; }
 }
 
-async function login(samlUrl, stateFile) {
-  const browser = await chromium.launch({ headless: false });
+async function login(samlUrl, stateFile, email, password) {
+  const headless = !!(email && password);
+  const browser = await chromium.launch({ headless });
   const context = await browser.newContext();
   const page = await context.newPage();
 
   await page.goto('https://login.microsoftonline.com');
 
-  // Wait until redirected away from login page (successful login)
-  try {
-    await page.waitForURL(
-      url => !url.toString().includes('login.microsoftonline.com') || url.toString().includes('kmsi'),
-      { timeout: TIMEOUT }
-    );
-    await page.waitForTimeout(3000);
-  } catch {
-    // Save state anyway — partial login may still have useful cookies
+  if (email && password) {
+    // Automated Entra login
+    await page.waitForSelector('input[type="email"]', { timeout: 15_000 });
+    await page.fill('input[type="email"]', email);
+    await page.click('input[type="submit"]');
+
+    await page.waitForSelector('input[type="password"]:visible', { timeout: 15_000 });
+    await page.fill('input[type="password"]', password);
+    await page.click('input[type="submit"]');
+
+    // "Stay signed in?" prompt — click Yes
+    try {
+      await page.waitForSelector('#idBtn_Back, #idSIButton9', { timeout: 10_000 });
+      const yesBtn = await page.$('#idSIButton9');
+      if (yesBtn) await yesBtn.click();
+    } catch { /* no KMSI prompt — continue */ }
+
+    await page.waitForTimeout(2000);
+  } else {
+    // Manual login — wait for user
+    try {
+      await page.waitForURL(
+        url => !url.toString().includes('login.microsoftonline.com') || url.toString().includes('kmsi'),
+        { timeout: TIMEOUT }
+      );
+      await page.waitForTimeout(3000);
+    } catch {
+      // Save state anyway — partial login may still have useful cookies
+    }
   }
 
   await context.storageState({ path: stateFile });
@@ -106,11 +127,11 @@ async function saml(samlUrl, stateFile) {
 }
 
 if (cmd === 'login') {
-  await login(process.argv[3], process.argv[4]);
+  await login(process.argv[3], process.argv[4], process.argv[5], process.argv[6]);
 } else if (cmd === 'saml') {
   await saml(process.argv[3], process.argv[4]);
 } else {
-  console.error('Usage: pw-saml.mjs login <saml-url> <state-file>');
+  console.error('Usage: pw-saml.mjs login <saml-url> <state-file> [email] [password]');
   console.error('       pw-saml.mjs saml  <saml-url> <state-file>');
   process.exit(1);
 }

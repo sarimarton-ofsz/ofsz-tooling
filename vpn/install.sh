@@ -57,7 +57,31 @@ else
     gum log --level warn "Could not detect shell rc — add manually: $PATH_LINE"
 fi
 
-# ── 3. WatchGuard (skippable) ────────────────────────────
+# ── 3. Microsoft (céges) credentials ─────────────────────
+# Used for both WatchGuard and AWS SAML auth. Asked once, stored in keychain.
+HAVE_EMAIL=$(security find-generic-password -s "vpn-entra" -a "email" -w 2>/dev/null) || true
+HAVE_PW=$(security find-generic-password -s "vpn-watchguard" -w 2>/dev/null) || true
+
+if [ -n "$HAVE_EMAIL" ] && [ -n "$HAVE_PW" ]; then
+    gum log --level info --prefix "✓" "Microsoft credentials: in keychain"
+else
+    echo ""
+    gum style --bold --foreground 212 "Microsoft (céges) bejelentkezés"
+    echo ""
+    email=$(gum input --placeholder "nev@ceg.hu" --header "Céges email cím:")
+    pw=$(gum input --password --placeholder "jelszó" --header "Céges jelszó:")
+    if [ -n "$email" ] && [ -n "$pw" ]; then
+        security delete-generic-password -s "vpn-entra" 2>/dev/null || true
+        security add-generic-password -s "vpn-entra" -a "email" -w "$email" -T ""
+        security delete-generic-password -s "vpn-watchguard" 2>/dev/null || true
+        security add-generic-password -s "vpn-watchguard" -a "watchguard" -w "$pw" -T ""
+        gum log --level info --prefix "✓" "Credentials stored in keychain"
+    else
+        warn_prereq "Credentials: not stored (empty input)"
+    fi
+fi
+
+# ── 4. WatchGuard (skippable) ────────────────────────────
 # Asked early so the config file exists before SwiftBar starts polling.
 SKIP_WG=false
 if ! gum confirm "WatchGuard VPN beállítása?" --default=yes; then
@@ -72,20 +96,6 @@ if ! $SKIP_WG; then
         gum log --level info --prefix "✓" "WatchGuard: running"
     else
         warn_prereq "WatchGuard: not running → contact IT for installation"
-    fi
-
-    # WatchGuard password: prompt if missing
-    if security find-generic-password -s "vpn-watchguard" -w &>/dev/null; then
-        gum log --level info --prefix "✓" "WatchGuard password: in keychain"
-    else
-        pw=$(gum input --password --placeholder "WatchGuard jelszó" --header "Add meg a Microsoft (céges) jelszavad:")
-        if [ -n "$pw" ]; then
-            security delete-generic-password -s "vpn-watchguard" 2>/dev/null || true
-            security add-generic-password -s "vpn-watchguard" -a "watchguard" -w "$pw" -T ""
-            gum log --level info --prefix "✓" "WatchGuard password: stored in keychain"
-        else
-            warn_prereq "WatchGuard password: not stored (empty input)"
-        fi
     fi
 fi
 
@@ -231,7 +241,7 @@ if [ $failed -eq 0 ]; then
     echo ""
     gum style --bold --foreground 212 "AWS VPN — Entra ID bejelentkezés"
     echo ""
-    if gum confirm "Indítás? (Eltarthat kb. 2 percig is)" --default=yes --affirmative "Mehet" --negative "Mégse"; then
+    if gum confirm "Indítás? (Eltarthat néhány másodpercig)" --default=yes --affirmative "Mehet" --negative "Mégse"; then
         aws_vpn_down 2>/dev/null || true
         aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
     else

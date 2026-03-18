@@ -157,9 +157,7 @@ done <<< "$selected"
 echo ""
 if [ $failed -eq 0 ]; then
     gum style --border double --border-foreground 76 --padding "0 2" --bold \
-        "✓ All done!" \
-        "" \
-        "Open a new terminal for PATH changes to take effect."
+        "✓ All done!"
 else
     gum style --border double --border-foreground 214 --padding "0 2" --bold \
         "! Installation complete with warnings" \
