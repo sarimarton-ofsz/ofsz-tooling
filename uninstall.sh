@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
 # OFSZ Tooling — meta-uninstaller
-# Usage: bash uninstall.sh  (from repo root or ~/.local/share/ofsz-tooling)
+# Usage: bash uninstall.sh         (interactive — select modules)
+#        bash uninstall.sh --all   (non-interactive — remove everything)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DATA_DIR="$HOME/.config/ofsz-tooling"
 SHARE_DIR="$HOME/.local/share/ofsz-tooling"
+ALL=false
+[[ "${1:-}" == "--all" ]] && ALL=true
 
-if ! command -v gum &>/dev/null; then
+if ! $ALL && ! command -v gum &>/dev/null; then
     echo "gum is required. Install: brew install gum"
     exit 1
 fi
 
 header() {
     echo ""
-    gum style --border rounded --border-foreground 214 --padding "0 2" --bold "$1"
+    if $ALL; then
+        echo "── $1 ──"
+    else
+        gum style --border rounded --border-foreground 214 --padding "0 2" --bold "$1"
+    fi
 }
 
 header "OFSZ Tooling Uninstaller"
@@ -39,48 +46,57 @@ for uninstaller in "$SCRIPT_DIR"/*/uninstall.sh; do
 done
 
 if [ ${#mod_dirs[@]} -eq 0 ]; then
-    gum log --level info "Nincs telepített modul — adatok törlése..."
+    echo "Nincs telepített modul — adatok törlése..."
     rm -rf "$DATA_DIR"
     [ -d "$SHARE_DIR" ] && rm -rf "$SHARE_DIR"
     echo "✓ Törölve."
     exit 0
 fi
 
-# ── Show & select modules ───────────────────────────────
-echo ""
-gum style --bold "Telepített modulok"
-choices=()
-for i in "${!mod_dirs[@]}"; do
-    label="${mod_names[$i]}"
-    [ -n "${mod_descs[$i]}" ] && label="${mod_names[$i]} — ${mod_descs[$i]}"
-    gum log --level info --prefix "✓" "$label"
-    choices+=("$label")
-done
-
-echo ""
-selected=$(printf '%s\n' "${choices[@]}" | gum choose --no-limit --header "Eltávolítandó modulok:")
-
-if [ -z "$selected" ]; then
-    echo ""
-    gum log --level info "Nincs kiválasztott modul"
-    exit 0
-fi
-
-# ── Run selected module uninstallers ─────────────────────
+# ── Select modules ───────────────────────────────────────
 removed=0
 total=${#mod_dirs[@]}
 
-while IFS= read -r sel; do
-    [ -n "$sel" ] || continue
-    for i in "${!choices[@]}"; do
-        if [ "${choices[$i]}" = "$sel" ]; then
-            header "Uninstalling: ${mod_names[$i]}"
-            bash "$SCRIPT_DIR/${mod_dirs[$i]}/uninstall.sh" || true
-            ((removed++)) || true
-            break
-        fi
+if $ALL; then
+    # Non-interactive: uninstall all modules
+    for i in "${!mod_dirs[@]}"; do
+        header "Uninstalling: ${mod_names[$i]}"
+        bash "$SCRIPT_DIR/${mod_dirs[$i]}/uninstall.sh" || true
+        ((removed++)) || true
     done
-done <<< "$selected"
+else
+    # Interactive: let user pick
+    echo ""
+    gum style --bold "Telepített modulok"
+    choices=()
+    for i in "${!mod_dirs[@]}"; do
+        label="${mod_names[$i]}"
+        [ -n "${mod_descs[$i]}" ] && label="${mod_names[$i]} — ${mod_descs[$i]}"
+        gum log --level info --prefix "✓" "$label"
+        choices+=("$label")
+    done
+
+    echo ""
+    selected=$(printf '%s\n' "${choices[@]}" | gum choose --no-limit --header "Eltávolítandó modulok:")
+
+    if [ -z "$selected" ]; then
+        echo ""
+        gum log --level info "Nincs kiválasztott modul"
+        exit 0
+    fi
+
+    while IFS= read -r sel; do
+        [ -n "$sel" ] || continue
+        for i in "${!choices[@]}"; do
+            if [ "${choices[$i]}" = "$sel" ]; then
+                header "Uninstalling: ${mod_names[$i]}"
+                bash "$SCRIPT_DIR/${mod_dirs[$i]}/uninstall.sh" || true
+                ((removed++)) || true
+                break
+            fi
+        done
+    done <<< "$selected"
+fi
 
 # ── Full cleanup if all modules removed ──────────────────
 if [ "$removed" -lt "$total" ]; then
