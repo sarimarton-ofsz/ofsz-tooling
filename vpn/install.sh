@@ -74,14 +74,17 @@ else
         gum log --level info --prefix "·" "Email: $email (keychain)"
     else
         email=$(gum input --prompt "Céges email cím: " --width 60)
+        gum log --level info --prefix "·" "Email: $email"
     fi
     if [ -n "$HAVE_GP_USER" ]; then
         gp_user="$HAVE_GP_USER"
         gum log --level info --prefix "·" "GP user: $gp_user (keychain)"
     else
         gp_user=$(gum input --prompt "GP felhasználónév (pl. kiss_janos): " --width 60)
+        gum log --level info --prefix "·" "GP user: $gp_user"
     fi
     pw=$(gum input --password --prompt "Céges jelszó: " --width 60)
+    gum log --level info --prefix "·" "Jelszó: ********"
     if [ -n "$email" ] && [ -n "$pw" ] && [ -n "$gp_user" ]; then
         security delete-generic-password -s "vpn-entra" 2>/dev/null || true
         security add-generic-password -s "vpn-entra" -a "email" -w "$email" -T /usr/bin/security
