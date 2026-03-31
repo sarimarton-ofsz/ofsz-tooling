@@ -27,7 +27,7 @@ warn_prereq() {
 
 # ── 1. Permissions & runtime dir ─────────────────────────
 chmod +x "$TOOL_DIR/vpn" "$TOOL_DIR/aws-connect.sh" "$TOOL_DIR/lib.sh"
-chmod +x "$TOOL_DIR/vpn.30s.sh"
+chmod +x "$TOOL_DIR/vpn.30s.sh" "$TOOL_DIR/gp-vpnc-script.sh"
 mkdir -p "$DATA_DIR/run"
 
 gum log --level info --prefix "✓" "VPN scripts at $TOOL_DIR"

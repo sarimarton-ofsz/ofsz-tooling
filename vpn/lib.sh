@@ -181,6 +181,8 @@ aws_vpn_down() {
 # ── GlobalProtect (via openconnect) ───────────────────────────────────
 GP_PORTAL="vpn.ofsz.hu"
 GP_GATEWAY="OFSZ_GW"
+GP_DNS_SERVERS=("10.10.122.6" "10.10.122.7")
+GP_DNS_DOMAINS=("ofsz.local" "ofsz.hu")
 GP_PID_FILE="$DATA_DIR/run/globalprotect.pid"
 GP_LOG_FILE="$DATA_DIR/run/globalprotect.log"
 GP_KEYCHAIN_PASSWORD="vpn-gp"
@@ -242,11 +244,20 @@ gp_up() {
 
     log "GlobalProtect: connecting to $GP_PORTAL..."
 
+    # Set up /etc/resolver/ files for split-DNS (macOS native per-domain DNS).
+    # The vpnc-script wrapper strips DNS vars so openconnect won't override
+    # system DNS; these files route only corporate domains to corporate DNS.
+    sudo mkdir -p /etc/resolver
+    for domain in "${GP_DNS_DOMAINS[@]}"; do
+        printf 'nameserver %s\n' "${GP_DNS_SERVERS[@]}" | sudo tee "/etc/resolver/$domain" > /dev/null
+    done
+
     # Pipe password + gateway selection (openconnect reads both from stdin)
     printf '%s\n%s\n' "$password" "$GP_GATEWAY" | sudo "$OPENCONNECT_BIN" \
         --protocol=gp \
         --user="$user" \
         --passwd-on-stdin \
+        --script="$SCRIPT_DIR/gp-vpnc-script.sh" \
         --background \
         --pid-file="$GP_PID_FILE" \
         "$GP_PORTAL" \
@@ -281,6 +292,11 @@ gp_down() {
     sudo pkill -f "openconnect.*--protocol=gp" 2>/dev/null || true
     rm -f "$GP_PID_FILE"
 
+    # Clean up split-DNS resolver files
+    for domain in "${GP_DNS_DOMAINS[@]}"; do
+        sudo rm -f "/etc/resolver/$domain"
+    done
+
     local i=0
     while [ $i -lt 10 ]; do
         if [ "$(gp_status)" = "disconnected" ]; then
@@ -295,6 +311,9 @@ gp_down() {
 }
 
 # ── Network diagnostics ────────────────────────────────────────────
+GP_HEALTH_URL="https://jc360.ofsz.hu/Login/"
+AWS_HEALTH_URL="https://jenkins.devops.local.ofsz.cloud/job/ofsz-neobank-web-build/"
+
 net_check() {
     log "Network diagnostics:"
     echo "  Default gateway:  $(netstat -rn -f inet 2>/dev/null | awk '/^default/{print $2; exit}')"
@@ -303,6 +322,11 @@ net_check() {
     [[ "$GP_ENABLED" == "true" ]] && echo "  GlobalProtect:    $(gp_status)"
     echo "  Internet (1.1.1.1): $(ping -c1 -W2 1.1.1.1 &>/dev/null && echo "ok" || echo "FAIL")"
     echo "  DNS (google.com):   $(ping -c1 -W2 google.com &>/dev/null && echo "ok" || echo "FAIL")"
+    # VPN health checks — verify actual connectivity through tunnels
+    [[ "$GP_ENABLED" == "true" ]] && [[ "$(gp_status)" == "connected" ]] && \
+        echo "  GP health:         $(curl -so /dev/null -w '%{http_code}' --max-time 5 "$GP_HEALTH_URL" 2>/dev/null | grep -q '^[23]' && echo "ok" || echo "FAIL ($GP_HEALTH_URL)")"
+    [[ "$(aws_vpn_status)" == "connected" ]] && \
+        echo "  AWS health:        $(curl -so /dev/null -w '%{http_code}' --max-time 5 "$AWS_HEALTH_URL" 2>/dev/null | grep -q '^[23]' && echo "ok" || echo "FAIL ($AWS_HEALTH_URL)")"
 }
 
 route_snapshot() {
