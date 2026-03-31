@@ -17,7 +17,7 @@ VPN="$SCRIPT_DIR/vpn"
 TS_CLI="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 
 # ── Config ──────────────────────────────────────────────────
-WG_ENABLED=true
+GP_ENABLED=true
 [ -f "$VPN_DIR/config" ] && source "$VPN_DIR/config"
 
 # ── Fast status checks (no AppleScript — pure process/route detection) ──
@@ -40,22 +40,16 @@ fast_aws_status() {
     echo "disconnected"
 }
 
-fast_wg_status() {
-    if ! pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
-        echo "not-running"
-        return
+fast_gp_status() {
+    local pid
+    pid=$(cat "$VPN_DIR/run/globalprotect.pid" 2>/dev/null) || true
+    if [[ -n "$pid" ]] && ps -p "$pid" &>/dev/null; then
+        echo "connected"; return
     fi
-    local ts_iface aws_iface exclude
-    ts_iface=$(netstat -rn -f inet 2>/dev/null | awk '/100\.64\/10.*utun/{print $NF}')
-    aws_iface=$(grep -o 'utun[0-9]*' "$VPN_DIR/run/openvpn.log" 2>/dev/null | tail -1)
-    exclude="${ts_iface:-__ts__}|${aws_iface:-__aws__}"
-
-    if netstat -rn -f inet 2>/dev/null | grep utun | grep -vE "$exclude" \
-         | grep -qE "^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)"; then
-        echo "connected"
-    else
-        echo "disconnected"
+    if pgrep -qf "openconnect.*--protocol=gp" 2>/dev/null; then
+        echo "connected"; return
     fi
+    echo "disconnected"
 }
 
 # ── Network detail helpers (for tooltips) ────────────────
@@ -81,10 +75,10 @@ aws_detail() {
 
 ts=$(fast_ts_status)
 aws=$(fast_aws_status)
-if [[ "$WG_ENABLED" == "true" ]]; then
-    wg=$(fast_wg_status)
+if [[ "$GP_ENABLED" == "true" ]]; then
+    gp=$(fast_gp_status)
 else
-    wg="disabled"
+    gp="disabled"
 fi
 
 # ── AWS auto-reconnect (if dropped unexpectedly) ─────────
@@ -142,11 +136,11 @@ n=0
 expected=0
 [[ "$ts"  == "connected" ]] && ((n++)) || true
 [[ "$aws" == "connected" ]] && ((n++)) || true
-[[ "$WG_ENABLED" == "true" ]] && [[ "$wg" == "connected" ]] && ((n++)) || true
+[[ "$GP_ENABLED" == "true" ]] && [[ "$gp" == "connected" ]] && ((n++)) || true
 # Count how many VPNs are configured (expected to be connected)
 ((expected++)) || true  # Tailscale always expected
 ((expected++)) || true  # AWS always expected
-[[ "$WG_ENABLED" == "true" ]] && ((expected++)) || true
+[[ "$GP_ENABLED" == "true" ]] && ((expected++)) || true
 
 # ── Menu bar (ANSI 16-color for text, sfcolor for icon) ───
 A_RST=$'\033[0m'
@@ -185,13 +179,14 @@ else
     echo "AWS VPN (verbose) | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=true refresh=true alternate=true"
 fi
 
-# WatchGuard
-if [[ "$WG_ENABLED" == "true" ]]; then
-    if [[ "$wg" == "connected" ]]; then
-        echo "WatchGuard | size=13 color=$(status_color "$wg") checked=true bash=$VPN param1=wg-down terminal=false refresh=true"
-        echo "WatchGuard (verbose) | size=13 color=$(status_color "$wg") checked=true bash=$VPN param1=wg-down terminal=true refresh=true alternate=true"
+# GlobalProtect
+if [[ "$GP_ENABLED" == "true" ]]; then
+    if [[ "$gp" == "connected" ]]; then
+        echo "GlobalProtect | size=13 color=$(status_color "$gp") checked=true bash=$VPN param1=gp-down terminal=false refresh=true"
+        echo "GlobalProtect (verbose) | size=13 color=$(status_color "$gp") checked=true bash=$VPN param1=gp-down terminal=true refresh=true alternate=true"
     else
-        echo "WatchGuard | size=13 color=$(status_color "$wg") bash=$VPN param1=wg-up terminal=true refresh=true"
+        echo "GlobalProtect | size=13 color=$(status_color "$gp") bash=$VPN param1=gp-up terminal=false refresh=true"
+        echo "GlobalProtect (verbose) | size=13 color=$(status_color "$gp") bash=$VPN param1=gp-up terminal=true refresh=true alternate=true"
     fi
 fi
 

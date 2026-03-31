@@ -58,44 +58,50 @@ else
 fi
 
 # ── 3. Microsoft (céges) credentials ─────────────────────
-# Used for both WatchGuard and AWS SAML auth. Asked once, stored in keychain.
+# Used for AWS SAML auth and GlobalProtect. Asked once, stored in keychain.
 HAVE_EMAIL=$(security find-generic-password -s "vpn-entra" -a "email" -w 2>/dev/null) || true
-HAVE_PW=$(security find-generic-password -s "vpn-watchguard" -w 2>/dev/null) || true
+HAVE_PW=$(security find-generic-password -s "vpn-gp" -w 2>/dev/null) || true
+HAVE_GP_USER=$(security find-generic-password -s "vpn-gp-user" -w 2>/dev/null) || true
 
-if [ -n "$HAVE_EMAIL" ] && [ -n "$HAVE_PW" ]; then
+if [ -n "$HAVE_EMAIL" ] && [ -n "$HAVE_PW" ] && [ -n "$HAVE_GP_USER" ]; then
     gum log --level info --prefix "✓" "Microsoft credentials: in keychain"
 else
     echo ""
     gum style --bold --foreground 212 "Microsoft (céges) bejelentkezés"
     echo ""
-    email=$(gum input --placeholder "nev@ceg.hu" --header "Céges email cím:")
+    email=${HAVE_EMAIL:-$(gum input --placeholder "nev@ceg.hu" --header "Céges email cím:")}
+    gp_user=${HAVE_GP_USER:-$(gum input --placeholder "vezeteknev_keresztnev" --header "GlobalProtect felhasználónév (pl. kiss_janos):")}
     pw=$(gum input --password --placeholder "jelszó" --header "Céges jelszó:")
-    if [ -n "$email" ] && [ -n "$pw" ]; then
+    if [ -n "$email" ] && [ -n "$pw" ] && [ -n "$gp_user" ]; then
         security delete-generic-password -s "vpn-entra" 2>/dev/null || true
         security add-generic-password -s "vpn-entra" -a "email" -w "$email" -T /usr/bin/security
-        security delete-generic-password -s "vpn-watchguard" 2>/dev/null || true
-        security add-generic-password -s "vpn-watchguard" -a "watchguard" -w "$pw" -T /usr/bin/security
+        security delete-generic-password -s "vpn-gp" 2>/dev/null || true
+        security add-generic-password -s "vpn-gp" -a "globalprotect" -w "$pw" -T /usr/bin/security
+        security delete-generic-password -s "vpn-gp-user" 2>/dev/null || true
+        security add-generic-password -s "vpn-gp-user" -a "globalprotect" -w "$gp_user" -T /usr/bin/security
         gum log --level info --prefix "✓" "Credentials stored in keychain"
     else
         warn_prereq "Credentials: not stored (empty input)"
     fi
 fi
 
-# ── 4. WatchGuard (skippable) ────────────────────────────
+# ── 4. GlobalProtect (skippable) ─────────────────────────
 # Asked early so the config file exists before SwiftBar starts polling.
-SKIP_WG=false
-if ! gum confirm "WatchGuard VPN beállítása?" --default=yes; then
-    SKIP_WG=true
-    gum log --level info --prefix "–" "WatchGuard: skipped"
+SKIP_GP=false
+if ! gum confirm "GlobalProtect VPN beállítása?" --default=yes; then
+    SKIP_GP=true
+    gum log --level info --prefix "–" "GlobalProtect: skipped"
 fi
 
-echo "WG_ENABLED=$( $SKIP_WG && echo false || echo true )" > "$DATA_DIR/config"
+echo "GP_ENABLED=$( $SKIP_GP && echo false || echo true )" > "$DATA_DIR/config"
 
-if ! $SKIP_WG; then
-    if pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
-        gum log --level info --prefix "✓" "WatchGuard: running"
+if ! $SKIP_GP; then
+    if command -v openconnect &>/dev/null; then
+        gum log --level info --prefix "✓" "openconnect: $(openconnect --version 2>&1 | head -1)"
     else
-        warn_prereq "WatchGuard: not running → contact IT for installation"
+        gum log --level info "openconnect: installing..."
+        brew install openconnect
+        _mark_dep openconnect
     fi
 fi
 
@@ -107,7 +113,7 @@ gum style --faint "A telepítő feltételezi, hogy minden VPN már be van állí
     "" \
     "  • Tailscale — telepítve és bejelentkezve" \
     "  • AWS VPN Client — telepítve, profil konfigurálva (legalább 1 GUI-s csatlakozás volt)" \
-    "$( [ "$SKIP_WG" = "false" ] && echo '  • WatchGuard — futó kliens a céges jelszóval' || true )"
+    "$( [ "$SKIP_GP" = "false" ] && echo '  • GlobalProtect — openconnect telepítve, céges credentials megadva' || true )"
 echo ""
 if ! gum confirm "Megerősítem, ezek működnek" --default=yes --affirmative "Megerősítem" --negative "Mégsem"; then
     gum log --level warn "Telepítés megszakítva — állítsd be a VPN-eket és futtasd újra"
@@ -115,7 +121,7 @@ if ! gum confirm "Megerősítem, ezek működnek" --default=yes --affirmative "M
 fi
 
 # ── 4. SwiftBar: auto-install + symlink ──────────────────
-# Placed after config write so SwiftBar reads WG_ENABLED correctly on first poll.
+# Placed after config write so SwiftBar reads GP_ENABLED correctly on first poll.
 SWIFTBAR_SRC="$TOOL_DIR/vpn.30s.sh"
 SWIFTBAR_DEST="$SWIFTBAR_PLUGINS/vpn.30s.sh"
 
@@ -191,19 +197,22 @@ else
     warn_prereq "AWS VPN Client: not installed → https://self-service.clientvpn.amazonaws.com/endpoints/cvpn-endpoint-022755a701a9c6b8c"
 fi
 
-# ── 9. Sudoers: auto-setup if AWS VPN Client present ────
+# ── 9. Sudoers: auto-setup for VPN tools ─────────────────
+sudoers_file="/etc/sudoers.d/vpn"
+# Migrate old file name
+[ -f /etc/sudoers.d/vpn-aws ] && sudo rm -f /etc/sudoers.d/vpn-aws
+openconnect_bin="$(command -v openconnect 2>/dev/null || echo /opt/homebrew/bin/openconnect)"
 if [ -x "$OVPN_BIN" ]; then
-    sudoers_file="/etc/sudoers.d/vpn-aws"
     if [ -f "$sudoers_file" ]; then
-        gum log --level info --prefix "✓" "AWS VPN sudoers: configured"
+        gum log --level info --prefix "✓" "VPN sudoers: configured"
     else
         ovpn_bin_escaped="${OVPN_BIN// /\\ }"
-        gum log --level info "Configuring passwordless sudo for AWS VPN..."
-        printf '%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: /bin/kill *\n' \
-            "$USER" "$ovpn_bin_escaped" "$USER" | sudo tee "$sudoers_file" > /dev/null
+        gum log --level info "Configuring passwordless sudo for VPN tools..."
+        printf '%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: /bin/kill *\n' \
+            "$USER" "$ovpn_bin_escaped" "$USER" "$openconnect_bin" "$USER" | sudo tee "$sudoers_file" > /dev/null
         sudo chmod 440 "$sudoers_file"
         if sudo visudo -cf "$sudoers_file"; then
-            gum log --level info --prefix "✓" "AWS VPN sudoers: configured"
+            gum log --level info --prefix "✓" "VPN sudoers: configured"
         else
             gum log --level error "Sudoers syntax error — removing broken file"
             sudo rm -f "$sudoers_file"
@@ -243,13 +252,13 @@ if [ $failed -eq 0 ]; then
     aws_vpn_down 2>/dev/null || true
     aws_vpn_up || { gum log --level warn "AWS VPN: failed"; failed=1; }
 
-    # WatchGuard
-    if ! $SKIP_WG; then
-        if [ "$(wg_status)" = "connected" ]; then
-            gum log --level info --prefix "✓" "WatchGuard: already connected"
+    # GlobalProtect
+    if ! $SKIP_GP; then
+        if [ "$(gp_status)" = "connected" ]; then
+            gum log --level info --prefix "✓" "GlobalProtect: already connected"
         else
-            gum log --level info "WatchGuard: connecting..."
-            wg_up || { gum log --level warn "WatchGuard: failed"; failed=1; }
+            gum log --level info "GlobalProtect: connecting..."
+            gp_up || { gum log --level warn "GlobalProtect: failed"; failed=1; }
         fi
     fi
 
@@ -258,15 +267,15 @@ if [ $failed -eq 0 ]; then
     gum style --bold --foreground 212 "Ellenőrzés"
     max_wait=90; waited=0
     while [ $waited -lt $max_wait ]; do
-        ts_ok=""; aws_ok=""; wg_ok=true
+        ts_ok=""; aws_ok=""; gp_ok=true
         ts_ok=$(ts_status)
         aws_ok=$(aws_vpn_status)
-        $SKIP_WG || wg_ok=$(wg_status)
+        $SKIP_GP || gp_ok=$(gp_status)
 
-        if [ "$ts_ok" = "connected" ] && [ "$aws_ok" = "connected" ] && { $SKIP_WG || [ "$wg_ok" = "connected" ]; }; then
+        if [ "$ts_ok" = "connected" ] && [ "$aws_ok" = "connected" ] && { $SKIP_GP || [ "$gp_ok" = "connected" ]; }; then
             gum log --level info --prefix "✓" "Tailscale: connected"
             gum log --level info --prefix "✓" "AWS VPN: connected"
-            $SKIP_WG || gum log --level info --prefix "✓" "WatchGuard: connected"
+            $SKIP_GP || gum log --level info --prefix "✓" "GlobalProtect: connected"
             break
         fi
 
@@ -281,7 +290,7 @@ if [ $failed -eq 0 ]; then
         gum log --level warn "Timeout — nem sikerült minden VPN-t csatlakoztatni"
         gum log --level info "  Tailscale: $(ts_status)"
         gum log --level info "  AWS VPN: $(aws_vpn_status)"
-        $SKIP_WG || gum log --level info "  WatchGuard: $(wg_status)"
+        $SKIP_GP || gum log --level info "  GlobalProtect: $(gp_status)"
         failed=1
     fi
 fi

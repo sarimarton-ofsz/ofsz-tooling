@@ -8,7 +8,7 @@ set -euo pipefail
 DATA_DIR="$HOME/.config/ofsz-tooling/vpn"
 
 # ── Config ──────────────────────────────────────────────────────────
-WG_ENABLED=true
+GP_ENABLED=true
 CONFIG_FILE="$DATA_DIR/config"
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 
@@ -178,154 +178,119 @@ aws_vpn_down() {
     ok "AWS VPN: disconnected"
 }
 
-# ── WatchGuard (WireGuard) ──────────────────────────────────────────
-WG_KEYCHAIN_SERVICE="vpn-watchguard"
+# ── GlobalProtect (via openconnect) ───────────────────────────────────
+GP_PORTAL="vpn.ofsz.hu"
+GP_GATEWAY="OFSZ_GW"
+GP_PID_FILE="$DATA_DIR/run/globalprotect.pid"
+GP_LOG_FILE="$DATA_DIR/run/globalprotect.log"
+GP_KEYCHAIN_PASSWORD="vpn-gp"
+GP_KEYCHAIN_USER="vpn-gp-user"
+OPENCONNECT_BIN="$(command -v openconnect 2>/dev/null || echo /opt/homebrew/bin/openconnect)"
 
-WG_STATUS_APPLESCRIPT='
-tell application "System Events"
-    tell process "WatchGuard Mobile VPN with SSL"
-        return name of menu item 1 of menu 1 of menu bar item 1 of menu bar 2
-    end tell
-end tell'
-
-WG_DISCONNECT_APPLESCRIPT='
-tell application "System Events"
-    tell process "WatchGuard Mobile VPN with SSL"
-        click menu item "Disconnect" of menu 1 of menu bar item 1 of menu bar 2
-    end tell
-end tell'
-
-wg_get_password() {
-    # Try our own keychain entry first
+gp_get_password() {
     local pw
-    pw=$(security find-generic-password -s "$WG_KEYCHAIN_SERVICE" -w 2>/dev/null) && { echo "$pw"; return 0; }
+    pw=$(security find-generic-password -s "$GP_KEYCHAIN_PASSWORD" -w 2>/dev/null) && { echo "$pw"; return 0; }
     return 1
 }
 
-wg_store_password() {
-    # Store/update password in keychain for headless use
-    # Usage: wg_store_password <password>
-    local pw="$1"
-    security delete-generic-password -s "$WG_KEYCHAIN_SERVICE" 2>/dev/null || true
-    security add-generic-password -s "$WG_KEYCHAIN_SERVICE" -a "watchguard" -w "$pw" -T /usr/bin/security 2>/dev/null
-    ok "WatchGuard: password stored in keychain ($WG_KEYCHAIN_SERVICE)"
+gp_get_user() {
+    local user
+    user=$(security find-generic-password -s "$GP_KEYCHAIN_USER" -w 2>/dev/null) && { echo "$user"; return 0; }
+    return 1
 }
 
-wg_status() {
-    # Returns: connected | disconnected | connecting | not-running
-    if ! pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
-        echo "not-running"
+gp_store_credentials() {
+    local user="$1" pw="$2"
+    security delete-generic-password -s "$GP_KEYCHAIN_USER" 2>/dev/null || true
+    security add-generic-password -s "$GP_KEYCHAIN_USER" -a "globalprotect" -w "$user" -T /usr/bin/security 2>/dev/null
+    security delete-generic-password -s "$GP_KEYCHAIN_PASSWORD" 2>/dev/null || true
+    security add-generic-password -s "$GP_KEYCHAIN_PASSWORD" -a "globalprotect" -w "$pw" -T /usr/bin/security 2>/dev/null
+    ok "GlobalProtect: credentials stored in keychain"
+}
+
+gp_status() {
+    # Returns: connected | disconnected
+    local pid; pid=$(cat "$GP_PID_FILE" 2>/dev/null) || true
+    if [ -n "$pid" ] && ps -p "$pid" &>/dev/null; then
+        echo "connected"
         return
     fi
-    local statusbar
-    statusbar=$(osascript -e "$WG_STATUS_APPLESCRIPT" 2>/dev/null) || { echo "not-running"; return; }
-
-    case "$statusbar" in
-        *"Not Connected"*) echo "disconnected" ;;
-        *"Connected"*)     echo "connected" ;;
-        *"Connecting"*)    echo "connecting" ;;
-        *)                 echo "disconnected" ;;
-    esac
+    if pgrep -qf "openconnect.*--protocol=gp" 2>/dev/null; then
+        echo "connected"
+        return
+    fi
+    echo "disconnected"
 }
 
-wg_up() {
-    local current
-    current=$(wg_status)
-    if [ "$current" = "connected" ]; then
-        ok "WatchGuard: already connected"
+gp_up() {
+    if [ "$(gp_status)" = "connected" ]; then
+        ok "GlobalProtect: already connected"
         return 0
     fi
 
-    # Get password
-    local password
-    if ! password=$(wg_get_password); then
-        err "WatchGuard: no password found in keychain"
-        err "Run: vpn wg-set-password to store it first"
+    local user password
+    if ! user=$(gp_get_user); then
+        err "GlobalProtect: no username in keychain"
+        err "Run: vpn gp-set-credentials"
+        return 1
+    fi
+    if ! password=$(gp_get_password); then
+        err "GlobalProtect: no password in keychain"
+        err "Run: vpn gp-set-credentials"
         return 1
     fi
 
-    # Launch WatchGuard if not running
-    if [ "$current" = "not-running" ]; then
-        log "WatchGuard: launching app..."
-        open -a "WatchGuard Mobile VPN with SSL" 2>/dev/null || {
-            err "WatchGuard: app not found"
-            return 1
-        }
-        # Wait for menubar process to appear
-        local w=0
-        while [ $w -lt 15 ]; do
-            if pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then break; fi
-            sleep 1
-            w=$((w + 1))
-        done
-        if ! pgrep -qf "WatchGuard Mobile VPN" 2>/dev/null; then
-            err "WatchGuard: app failed to start"
-            return 1
-        fi
-        sleep 2  # let menubar settle
-    fi
+    log "GlobalProtect: connecting to $GP_PORTAL..."
 
-    log "WatchGuard: connecting (with password from keychain)..."
+    echo "$password" | sudo "$OPENCONNECT_BIN" \
+        --protocol=gp \
+        --user="$user" \
+        --usergroup="gateway:$GP_GATEWAY" \
+        --passwd-on-stdin \
+        --background \
+        --pid-file="$GP_PID_FILE" \
+        "$GP_PORTAL" \
+        >> "$GP_LOG_FILE" 2>&1
 
-    # Click Connect in menubar → opens login dialog
-    osascript -e '
-tell application "System Events"
-    tell process "WatchGuard Mobile VPN with SSL"
-        click menu item "Connect" of menu 1 of menu bar item 1 of menu bar 2
-    end tell
-end tell' 2>/dev/null
-
-    sleep 2
-
-    # Fill password and click Connect in the login dialog
-    osascript \
-        -e "on run {pw}" \
-        -e 'tell application "System Events"' \
-        -e '    tell process "WatchGuard Mobile VPN with SSL"' \
-        -e '        set value of text field 2 of window 1 to pw' \
-        -e '        delay 0.5' \
-        -e '        click button "Connect" of window 1' \
-        -e '    end tell' \
-        -e 'end tell' \
-        -e 'end run' \
-        -- "$password" 2>/dev/null
-
+    # Wait for tunnel to come up
     local i=0
-    while [ $i -lt 30 ]; do
-        current=$(wg_status)
-        if [ "$current" = "connected" ]; then
-            ok "WatchGuard: connected"
+    while [ $i -lt 15 ]; do
+        if [ "$(gp_status)" = "connected" ]; then
+            ok "GlobalProtect: connected"
             return 0
         fi
         sleep 2
         i=$((i + 1))
     done
-    err "WatchGuard: timeout after 60s"
+    err "GlobalProtect: timeout after 30s"
     return 1
 }
 
-wg_down() {
-    local current
-    current=$(wg_status)
-    if [ "$current" = "disconnected" ] || [ "$current" = "not-running" ]; then
-        ok "WatchGuard: already disconnected"
+gp_down() {
+    if [ "$(gp_status)" = "disconnected" ]; then
+        ok "GlobalProtect: already disconnected"
         return 0
     fi
 
-    log "WatchGuard: disconnecting..."
-    osascript -e "$WG_DISCONNECT_APPLESCRIPT" 2>/dev/null
+    log "GlobalProtect: disconnecting..."
+    local pid; pid=$(cat "$GP_PID_FILE" 2>/dev/null) || true
+    if [ -n "$pid" ]; then
+        sudo kill "$pid" 2>/dev/null || true
+    fi
+    # Fallback: kill by pattern
+    sudo pkill -f "openconnect.*--protocol=gp" 2>/dev/null || true
+    rm -f "$GP_PID_FILE"
 
     local i=0
-    while [ $i -lt 15 ]; do
-        current=$(wg_status)
-        if [ "$current" = "disconnected" ] || [ "$current" = "not-running" ]; then
-            ok "WatchGuard: disconnected"
+    while [ $i -lt 10 ]; do
+        if [ "$(gp_status)" = "disconnected" ]; then
+            ok "GlobalProtect: disconnected"
             return 0
         fi
         sleep 1
         i=$((i + 1))
     done
-    err "WatchGuard: disconnect timeout"
+    err "GlobalProtect: disconnect timeout"
     return 1
 }
 
@@ -335,7 +300,7 @@ net_check() {
     echo "  Default gateway:  $(netstat -rn -f inet 2>/dev/null | awk '/^default/{print $2; exit}')"
     echo "  Tailscale:        $(ts_status)"
     echo "  AWS VPN:          $(aws_vpn_status)"
-    [[ "$WG_ENABLED" == "true" ]] && echo "  WatchGuard:       $(wg_status)"
+    [[ "$GP_ENABLED" == "true" ]] && echo "  GlobalProtect:    $(gp_status)"
     echo "  Internet (1.1.1.1): $(ping -c1 -W2 1.1.1.1 &>/dev/null && echo "ok" || echo "FAIL")"
     echo "  DNS (google.com):   $(ping -c1 -W2 google.com &>/dev/null && echo "ok" || echo "FAIL")"
 }

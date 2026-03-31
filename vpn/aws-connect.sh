@@ -193,7 +193,7 @@ do_connect() {
     if [ ! -s "$SAML_RESPONSE_FILE" ]; then
         local email password
         email=$(security find-generic-password -s "vpn-entra" -a "email" -w 2>/dev/null) || true
-        password=$(security find-generic-password -s "vpn-watchguard" -w 2>/dev/null) || true
+        password=$(security find-generic-password -s "vpn-gp" -w 2>/dev/null || security find-generic-password -s "vpn-watchguard" -w 2>/dev/null) || true
 
         if [ -n "$email" ] && [ -n "$password" ]; then
             log "Automatikus Entra login..."
