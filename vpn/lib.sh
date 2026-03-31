@@ -242,10 +242,10 @@ gp_up() {
 
     log "GlobalProtect: connecting to $GP_PORTAL..."
 
-    echo "$password" | sudo "$OPENCONNECT_BIN" \
+    # Pipe password + gateway selection (openconnect reads both from stdin)
+    printf '%s\n%s\n' "$password" "$GP_GATEWAY" | sudo "$OPENCONNECT_BIN" \
         --protocol=gp \
         --user="$user" \
-        --usergroup="gateway:$GP_GATEWAY" \
         --passwd-on-stdin \
         --background \
         --pid-file="$GP_PID_FILE" \
