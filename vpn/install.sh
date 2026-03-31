@@ -73,15 +73,15 @@ else
         email="$HAVE_EMAIL"
         gum log --level info --prefix "·" "Email: $email (keychain)"
     else
-        email=$(gum input --header "Céges email cím:" --width 40)
+        email=$(gum input --prompt "Céges email cím: " --width 60)
     fi
     if [ -n "$HAVE_GP_USER" ]; then
         gp_user="$HAVE_GP_USER"
         gum log --level info --prefix "·" "GP user: $gp_user (keychain)"
     else
-        gp_user=$(gum input --header "GlobalProtect felhasználónév (pl. kiss_janos):" --width 40)
+        gp_user=$(gum input --prompt "GP felhasználónév (pl. kiss_janos): " --width 60)
     fi
-    pw=$(gum input --password --header "Céges jelszó:" --width 40)
+    pw=$(gum input --password --prompt "Céges jelszó: " --width 60)
     if [ -n "$email" ] && [ -n "$pw" ] && [ -n "$gp_user" ]; then
         security delete-generic-password -s "vpn-entra" 2>/dev/null || true
         security add-generic-password -s "vpn-entra" -a "email" -w "$email" -T /usr/bin/security
