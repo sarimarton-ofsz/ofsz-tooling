@@ -75,7 +75,7 @@ bash ~/.local/share/ofsz-tooling/uninstall.sh
 
 Az AWS VPN Client egy böngészőflow-val kiegészített, wrappelt OpenVPN: a kliens az AWS szervertől kap egy URL-t, nyit rá egy böngészőt, azon történik egy interaktív Entra login, majd a böngésző POST-ol egy SAML tokent egy helyi ad-hoc szerverre. A token birtokában indul a tényleges VPN tunnel.
 
-Ez a toolkit kiváltja a böngészőflow-t: háttérben futó Playwright automatizálja az Entra logint (kitölti a mezőket), elkapja a SAML választ, és továbbadja az OpenVPN-nek. A session state megmarad, így újracsatlakozáskor általában nem kell újra bejelentkezni. Az AWS VPN Client GUI-ját csak egyszer kell futtatni ezen tool telepítése előtt, utána többet nincs rá szükség.
+Ez a toolkit kiváltja a böngészőflow-t: háttérben futó Playwright automatizálja az Entra logint (kitölti a mezőket a Keychainben tárolt adatokkal), elkapja a SAML választ, és továbbadja az OpenVPN-nek. A session state megmarad, így újracsatlakozáskor általában nem kell újra bejelentkezni. Az AWS VPN Client GUI-ját csak egyszer kell futtatni ezen tool telepítése előtt, utána többet nincs rá szükség.
 
 ### GlobalProtect
 
