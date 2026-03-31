@@ -95,12 +95,11 @@ else
     fi
 fi
 
-# ── 4. GlobalProtect (skippable) ─────────────────────────
-# Asked early so the config file exists before SwiftBar starts polling.
-SKIP_GP=false
-if ! gum confirm "GlobalProtect VPN beállítása?" --default=yes; then
-    SKIP_GP=true
-    gum log --level info --prefix "–" "GlobalProtect: skipped"
+# ── 4. GlobalProtect ──────────────────────────────────────
+# Enabled by default. Disable with: setup.sh --disable-gp
+SKIP_GP="${OFSZ_DISABLE_GP:-false}"
+if $SKIP_GP; then
+    gum log --level info --prefix "–" "GlobalProtect: skipped (--disable-gp)"
 fi
 
 echo "GP_ENABLED=$( $SKIP_GP && echo false || echo true )" > "$DATA_DIR/config"

@@ -7,6 +7,14 @@
 {
 set -euo pipefail
 
+# ── Parse flags ────────────────────────────────────────────
+export OFSZ_DISABLE_GP=false
+for arg in "$@"; do
+    case "$arg" in
+        --disable-gp) OFSZ_DISABLE_GP=true ;;
+    esac
+done
+
 REPO_URL="https://github.com/sarimarton-ofsz/ofsz-tooling.git"
 INSTALL_DIR="$HOME/.local/share/ofsz-tooling"
 DATA_DIR="$HOME/.config/ofsz-tooling"
