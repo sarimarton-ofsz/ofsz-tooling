@@ -245,14 +245,16 @@ gp_up() {
     log "GlobalProtect: connecting to $GP_PORTAL..."
 
     # Wait for DNS to be available (can lag after Tailscale cycling)
+    sudo dscacheutil -flushcache 2>/dev/null || true
+    sudo killall -HUP mDNSResponder 2>/dev/null || true
     local d=0
-    while [ $d -lt 10 ]; do
+    while [ $d -lt 30 ]; do
         if host "$GP_PORTAL" &>/dev/null; then break; fi
         sleep 1
         d=$((d + 1))
     done
     if ! host "$GP_PORTAL" &>/dev/null; then
-        err "GlobalProtect: DNS cannot resolve $GP_PORTAL"
+        err "GlobalProtect: DNS cannot resolve $GP_PORTAL — ellenőrizd az internet-kapcsolatot"
         return 1
     fi
 

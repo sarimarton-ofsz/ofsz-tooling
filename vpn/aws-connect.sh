@@ -80,12 +80,14 @@ preflight_check() {
     fi
 
     # 5. Sudoers configured? (passwordless openvpn for tun device)
-    if ! [ -f /etc/sudoers.d/vpn-aws ]; then
+    # Check both new (/etc/sudoers.d/vpn) and legacy (/etc/sudoers.d/vpn-aws) paths
+    if ! [ -f /etc/sudoers.d/vpn ] && ! [ -f /etc/sudoers.d/vpn-aws ]; then
         log "Passwordless sudo not configured — setting up now..."
         local ovpn_bin_escaped="${OVPN_BIN// /\\ }"
-        local sudoers_file="/etc/sudoers.d/vpn-aws"
-        printf '%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: /bin/kill *\n' \
-            "$USER" "$ovpn_bin_escaped" "$USER" | sudo tee "$sudoers_file" > /dev/null \
+        local openconnect_bin; openconnect_bin="$(command -v openconnect 2>/dev/null || echo /opt/homebrew/bin/openconnect)"
+        local sudoers_file="/etc/sudoers.d/vpn"
+        printf '%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: /bin/kill *\n' \
+            "$USER" "$ovpn_bin_escaped" "$USER" "$openconnect_bin" "$USER" | sudo tee "$sudoers_file" > /dev/null \
             && sudo chmod 440 "$sudoers_file" \
             && sudo visudo -cf "$sudoers_file" &>/dev/null \
             && ok "Sudoers configured" \
