@@ -170,13 +170,13 @@ aws_tt=$(aws_detail)
 aws_extra=""
 [[ -n "$aws_tt" ]] && aws_extra=" tooltip=$aws_tt"
 if [[ "$aws" == "connected" ]]; then
-    echo "AWS VPN | size=13 color=$(status_color "$aws") checked=true badge=$aws_iface bash=$VPN param1=aws-down terminal=false refresh=true${aws_extra}"
-    echo "AWS VPN (verbose) | size=13 color=$(status_color "$aws") checked=true bash=$VPN param1=aws-down terminal=true refresh=true alternate=true"
+    echo "AWS | size=13 color=$(status_color "$aws") checked=true badge=$aws_iface bash=$VPN param1=aws-down terminal=false refresh=true${aws_extra}"
+    echo "AWS (verbose) | size=13 color=$(status_color "$aws") checked=true bash=$VPN param1=aws-down terminal=true refresh=true alternate=true"
 elif [[ "$aws" == "no-sudo" ]]; then
-    echo "AWS VPN ⚠ sudo | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=true refresh=true"
+    echo "AWS ⚠ sudo | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=true refresh=true"
 else
-    echo "AWS VPN | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=false refresh=true"
-    echo "AWS VPN (verbose) | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=true refresh=true alternate=true"
+    echo "AWS | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=false refresh=true"
+    echo "AWS (verbose) | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=true refresh=true alternate=true"
 fi
 
 # GlobalProtect
