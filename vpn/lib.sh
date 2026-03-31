@@ -244,6 +244,18 @@ gp_up() {
 
     log "GlobalProtect: connecting to $GP_PORTAL..."
 
+    # Wait for DNS to be available (can lag after Tailscale cycling)
+    local d=0
+    while [ $d -lt 10 ]; do
+        if host "$GP_PORTAL" &>/dev/null; then break; fi
+        sleep 1
+        d=$((d + 1))
+    done
+    if ! host "$GP_PORTAL" &>/dev/null; then
+        err "GlobalProtect: DNS cannot resolve $GP_PORTAL"
+        return 1
+    fi
+
     # Set up /etc/resolver/ files for split-DNS (macOS native per-domain DNS).
     # The vpnc-script wrapper strips DNS vars so openconnect won't override
     # system DNS; these files route only corporate domains to corporate DNS.
