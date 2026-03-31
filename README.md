@@ -47,3 +47,9 @@ vpn check               # Hálózati diagnosztika
 ## Frissítés
 
 Futtasd újra a telepítő parancsot.
+
+## Eltávolítás
+
+```bash
+bash ~/.local/share/ofsz-tooling/uninstall.sh
+```
