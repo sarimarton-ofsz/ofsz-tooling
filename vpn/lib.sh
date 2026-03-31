@@ -244,18 +244,30 @@ gp_up() {
 
     log "GlobalProtect: connecting to $GP_PORTAL..."
 
-    # Wait for DNS to be available (can lag after Tailscale cycling)
-    sudo dscacheutil -flushcache 2>/dev/null || true
-    sudo killall -HUP mDNSResponder 2>/dev/null || true
-    local d=0
-    while [ $d -lt 30 ]; do
-        if host "$GP_PORTAL" &>/dev/null; then break; fi
-        sleep 1
-        d=$((d + 1))
-    done
-    if ! host "$GP_PORTAL" &>/dev/null; then
-        err "GlobalProtect: DNS cannot resolve $GP_PORTAL — ellenőrizd az internet-kapcsolatot"
+    # Resolve portal IP ourselves — sudo openconnect's getaddrinfo can fail
+    # after Tailscale cycling even though user-level DNS works fine.
+    local portal_ip
+    portal_ip=$(dig +short "$GP_PORTAL" 2>/dev/null | grep -E '^[0-9.]+$' | head -1)
+    if [ -z "$portal_ip" ]; then
+        # Retry with DNS flush
+        sudo dscacheutil -flushcache 2>/dev/null || true
+        sudo killall -HUP mDNSResponder 2>/dev/null || true
+        local d=0
+        while [ $d -lt 15 ]; do
+            portal_ip=$(dig +short "$GP_PORTAL" 2>/dev/null | grep -E '^[0-9.]+$' | head -1)
+            [ -n "$portal_ip" ] && break
+            sleep 1
+            d=$((d + 1))
+        done
+    fi
+    if [ -z "$portal_ip" ]; then
+        err "GlobalProtect: DNS cannot resolve $GP_PORTAL"
         return 1
+    fi
+
+    # Ensure /etc/hosts has the portal entry so sudo openconnect can resolve it
+    if ! grep -q "$GP_PORTAL" /etc/hosts 2>/dev/null; then
+        echo "$portal_ip $GP_PORTAL" | sudo tee -a /etc/hosts > /dev/null
     fi
 
     # Set up /etc/resolver/ files for split-DNS (macOS native per-domain DNS).
@@ -267,7 +279,7 @@ gp_up() {
     done
 
     # Pipe password + gateway selection (openconnect reads both from stdin)
-    printf '%s\n%s\n' "$password" "$GP_GATEWAY" | sudo "$OPENCONNECT_BIN" \
+    if ! printf '%s\n%s\n' "$password" "$GP_GATEWAY" | sudo "$OPENCONNECT_BIN" \
         --protocol=gp \
         --user="$user" \
         --passwd-on-stdin \
@@ -275,11 +287,14 @@ gp_up() {
         --background \
         --pid-file="$GP_PID_FILE" \
         "$GP_PORTAL" \
-        >> "$GP_LOG_FILE" 2>&1
+        >> "$GP_LOG_FILE" 2>&1; then
+        err "GlobalProtect: openconnect failed (see $GP_LOG_FILE)"
+        return 1
+    fi
 
     # Wait for tunnel to come up
     local i=0
-    while [ $i -lt 15 ]; do
+    while [ $i -lt 10 ]; do
         if [ "$(gp_status)" = "connected" ]; then
             ok "GlobalProtect: connected"
             return 0
@@ -287,7 +302,7 @@ gp_up() {
         sleep 2
         i=$((i + 1))
     done
-    err "GlobalProtect: timeout after 30s"
+    err "GlobalProtect: timeout after 20s"
     return 1
 }
 
@@ -310,6 +325,11 @@ gp_down() {
     for domain in "${GP_DNS_DOMAINS[@]}"; do
         sudo rm -f "/etc/resolver/$domain"
     done
+
+    # Remove /etc/hosts entry added by gp_up
+    if grep -q "$GP_PORTAL" /etc/hosts 2>/dev/null; then
+        sudo sed -i '' "/$GP_PORTAL/d" /etc/hosts
+    fi
 
     local i=0
     while [ $i -lt 10 ]; do
