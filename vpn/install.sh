@@ -80,7 +80,7 @@ else
         gp_user="$HAVE_GP_USER"
         gum log --level info --prefix "·" "GP user: $gp_user (keychain)"
     else
-        gp_user=$(gum input --prompt "GP felhasználónév (pl. kiss_janos): " --width 60)
+        gp_user=$(gum input --prompt "GP felhasználónév (pl. vezeteknev_keresztnev): " --width 60)
         gum log --level info --prefix "·" "GP user: $gp_user"
     fi
     pw=$(gum input --password --prompt "Céges jelszó: " --width 60)
