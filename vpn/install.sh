@@ -83,7 +83,7 @@ else
         gp_user=$(gum input --prompt "GP felhasználónév (pl. vezeteknev_keresztnev): " --width 60)
         gum log --level info --prefix "·" "GP user: $gp_user"
     fi
-    pw=$(gum input --password --prompt "Céges jelszó: " --width 60)
+    pw=$(gum input --password --prompt "Céges jelszó (Microsoft): " --width 60)
     gum log --level info --prefix "·" "Jelszó: ********"
     if [ -n "$email" ] && [ -n "$pw" ] && [ -n "$gp_user" ]; then
         security delete-generic-password -s "vpn-entra" 2>/dev/null || true
