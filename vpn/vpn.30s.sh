@@ -88,7 +88,7 @@ RECONNECT_FAIL_FILE="$VPN_DIR/run/reconnect-failures"
 RECONNECT_MAX=3
 RECONNECT_COOLDOWN=300  # 5 min between retries
 if [[ "$aws" == "disconnected" ]] && [[ -f "$RECONNECT_FLAG" ]]; then
-    if ! [ -f /etc/sudoers.d/vpn-aws ]; then
+    if ! [ -f /etc/sudoers.d/vpn ] && ! [ -f /etc/sudoers.d/vpn-aws ]; then
         # Passwordless sudo not configured — can't reconnect without terminal
         aws="no-sudo"
     else
