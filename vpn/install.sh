@@ -122,8 +122,7 @@ echo ""
 gum style --faint "A telepítő feltételezi, hogy minden VPN már be van állítva és működik:" \
     "" \
     "  • Tailscale — telepítve és bejelentkezve" \
-    "  • AWS VPN Client — telepítve, profil konfigurálva (legalább 1 GUI-s csatlakozás volt)" \
-    "$( [ "$SKIP_GP" = "false" ] && echo '  • GlobalProtect — openconnect telepítve, céges credentials megadva' || true )"
+    "  • AWS VPN Client — telepítve, profil konfigurálva (legalább 1 GUI-s csatlakozás volt)"
 echo ""
 if ! gum confirm "Megerősítem, ezek működnek" --default=yes --affirmative "Megerősítem" --negative "Mégsem"; then
     gum log --level warn "Telepítés megszakítva — állítsd be a VPN-eket és futtasd újra"
