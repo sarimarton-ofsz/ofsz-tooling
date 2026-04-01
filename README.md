@@ -12,7 +12,7 @@ VPN kezelő macOS-re — Tailscale, AWS VPN és GlobalProtect egy helyről.
 curl -fsSL https://raw.githubusercontent.com/sarimarton-ofsz/ofsz-tooling/main/setup.sh | bash
 ```
 
-A telepítő mindent elintéz: letölti a szükséges eszközöket, bekéri a jelszavakat, és beállítja a menüsáv ikont. A jelszavakat a Keychainben tárolja. A scriptek a `~/.local/share/ofsz-tooling/`-ba, a futásidejű adatok a `~/.config/ofsz-tooling/`-ba kerülnek.
+A telepítő mindent elintéz: letölti a szükséges eszközöket, bekéri a jelszavakat, és beállítja a menüsáv ikont. A jelszavakat a Keychainben tárolja.
 
 <details>
 <summary>CI / GlobalProtect nélküli telepítés</summary>
@@ -65,6 +65,8 @@ Futtasd újra a telepítő parancsot.
 ```bash
 bash ~/.local/share/ofsz-tooling/uninstall.sh
 ```
+
+> A teljes eltávolítás két könyvtárat töröl: a scripteket (`~/.local/share/ofsz-tooling/`) és a futásidejű adatokat (`~/.config/ofsz-tooling/`).
 
 ---
 
