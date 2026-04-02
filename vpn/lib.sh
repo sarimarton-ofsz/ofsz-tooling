@@ -244,8 +244,18 @@ gp_up() {
 
     log "GlobalProtect: connecting to $GP_PORTAL..."
 
+    # Clean up stale resolver files from a previous session that may have
+    # crashed without running gp_down. These files route *.ofsz.hu queries
+    # to corporate DNS (10.10.122.x) which is unreachable when GP is down,
+    # preventing us from resolving the portal hostname.
+    for domain in "${GP_DNS_DOMAINS[@]}"; do
+        sudo rm -f "/etc/resolver/$domain" 2>/dev/null || true
+    done
+
     # Resolve portal IP ourselves — sudo openconnect's getaddrinfo can fail
     # after Tailscale cycling even though user-level DNS works fine.
+    # When AWS VPN is up, the default resolver may point to corporate DNS
+    # which can't resolve the public GP portal — fall back to public DNS.
     local portal_ip
     portal_ip=$(dig +short "$GP_PORTAL" 2>/dev/null | grep -E '^[0-9.]+$' | head -1)
     if [ -z "$portal_ip" ]; then
@@ -253,11 +263,18 @@ gp_up() {
         sudo dscacheutil -flushcache 2>/dev/null || true
         sudo killall -HUP mDNSResponder 2>/dev/null || true
         local d=0
-        while [ $d -lt 15 ]; do
+        while [ $d -lt 5 ]; do
             portal_ip=$(dig +short "$GP_PORTAL" 2>/dev/null | grep -E '^[0-9.]+$' | head -1)
             [ -n "$portal_ip" ] && break
             sleep 1
             d=$((d + 1))
+        done
+    fi
+    if [ -z "$portal_ip" ]; then
+        # Default resolver failed — try public DNS directly
+        for dns in 1.1.1.1 8.8.8.8; do
+            portal_ip=$(dig +short "$GP_PORTAL" "@$dns" 2>/dev/null | grep -E '^[0-9.]+$' | head -1)
+            [ -n "$portal_ip" ] && { log "Resolved $GP_PORTAL via $dns"; break; }
         done
     fi
     if [ -z "$portal_ip" ]; then
