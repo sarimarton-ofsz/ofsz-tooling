@@ -267,16 +267,22 @@ gp_up() {
 
     # Ensure /etc/hosts has the portal entry so sudo openconnect can resolve it
     if ! grep -q "$GP_PORTAL" /etc/hosts 2>/dev/null; then
-        echo "$portal_ip $GP_PORTAL" | sudo tee -a /etc/hosts > /dev/null
+        echo "$portal_ip $GP_PORTAL" | sudo tee -a /etc/hosts > /dev/null 2>&1 \
+            || warn "Could not add $GP_PORTAL to /etc/hosts (no sudo?)"
     fi
 
     # Set up /etc/resolver/ files for split-DNS (macOS native per-domain DNS).
     # The vpnc-script wrapper strips DNS vars so openconnect won't override
     # system DNS; these files route only corporate domains to corporate DNS.
-    sudo mkdir -p /etc/resolver
-    for domain in "${GP_DNS_DOMAINS[@]}"; do
-        printf 'nameserver %s\n' "${GP_DNS_SERVERS[@]}" | sudo tee "/etc/resolver/$domain" > /dev/null
-    done
+    # Non-fatal: split-DNS is important but should not block the connection.
+    if sudo mkdir -p /etc/resolver 2>/dev/null; then
+        for domain in "${GP_DNS_DOMAINS[@]}"; do
+            printf 'nameserver %s\n' "${GP_DNS_SERVERS[@]}" | sudo tee "/etc/resolver/$domain" > /dev/null 2>&1 \
+                || warn "Could not write /etc/resolver/$domain"
+        done
+    else
+        warn "Could not create /etc/resolver/ (no sudo?) — split-DNS won't work"
+    fi
 
     # Pipe password + gateway selection (openconnect reads both from stdin)
     if ! printf '%s\n%s\n' "$password" "$GP_GATEWAY" | sudo "$OPENCONNECT_BIN" \
@@ -323,12 +329,12 @@ gp_down() {
 
     # Clean up split-DNS resolver files
     for domain in "${GP_DNS_DOMAINS[@]}"; do
-        sudo rm -f "/etc/resolver/$domain"
+        sudo rm -f "/etc/resolver/$domain" 2>/dev/null || true
     done
 
     # Remove /etc/hosts entry added by gp_up
     if grep -q "$GP_PORTAL" /etc/hosts 2>/dev/null; then
-        sudo sed -i '' "/$GP_PORTAL/d" /etc/hosts
+        sudo sed -i '' "/$GP_PORTAL/d" /etc/hosts 2>/dev/null || true
     fi
 
     local i=0

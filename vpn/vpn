@@ -253,11 +253,26 @@ case "${1:-}" in
         fi
         # Migrate old sudoers file if present
         [ -f /etc/sudoers.d/vpn-aws ] && sudo rm -f /etc/sudoers.d/vpn-aws
-        if [ -f "$sudoers_file" ]; then
-            ok "Passwordless sudo already configured — nothing to do"
-            exit 0
-        fi
         ovpn_bin_escaped="${ovpn_bin// /\\ }"
+        # Build expected sudoers content
+        expected_sudoers=$(printf '%s ALL=(ALL) NOPASSWD: %s *\n' \
+            "$USER" "$ovpn_bin_escaped" \
+            "$USER" "$openconnect_bin" \
+            "$USER" "/bin/kill" \
+            "$USER" "/usr/bin/tee" \
+            "$USER" "/bin/mkdir" \
+            "$USER" "/bin/rm" \
+            "$USER" "/usr/bin/sed" \
+            "$USER" "/usr/sbin/dscacheutil" \
+            "$USER" "/usr/bin/killall")
+        if [ -f "$sudoers_file" ]; then
+            current=$(sudo cat "$sudoers_file" 2>/dev/null)
+            if [ "$current" = "$expected_sudoers" ]; then
+                ok "Passwordless sudo already configured — nothing to do"
+                exit 0
+            fi
+            warn "Sudoers file exists but is outdated — updating"
+        fi
         echo "This will allow passwordless sudo for VPN tools."
         echo ""
         echo "  File: $sudoers_file"
@@ -265,12 +280,17 @@ case "${1:-}" in
         echo "    $USER ALL=(ALL) NOPASSWD: $ovpn_bin_escaped *"
         echo "    $USER ALL=(ALL) NOPASSWD: $openconnect_bin *"
         echo "    $USER ALL=(ALL) NOPASSWD: /bin/kill *"
+        echo "    $USER ALL=(ALL) NOPASSWD: /usr/bin/tee *"
+        echo "    $USER ALL=(ALL) NOPASSWD: /bin/mkdir *"
+        echo "    $USER ALL=(ALL) NOPASSWD: /bin/rm *"
+        echo "    $USER ALL=(ALL) NOPASSWD: /usr/bin/sed *"
+        echo "    $USER ALL=(ALL) NOPASSWD: /usr/sbin/dscacheutil *"
+        echo "    $USER ALL=(ALL) NOPASSWD: /usr/bin/killall *"
         echo ""
         echo -n "Continue? [y/N] "
         read -r confirm
         if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-            printf '%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: /bin/kill *\n' \
-                "$USER" "$ovpn_bin_escaped" "$USER" "$openconnect_bin" "$USER" | sudo tee "$sudoers_file" > /dev/null
+            echo "$expected_sudoers" | sudo tee "$sudoers_file" > /dev/null
             sudo chmod 440 "$sudoers_file"
             sudo visudo -cf "$sudoers_file" && ok "Done — VPN tools now work without password prompts" \
                 || { err "sudoers syntax error — removing broken file"; sudo rm -f "$sudoers_file"; }
