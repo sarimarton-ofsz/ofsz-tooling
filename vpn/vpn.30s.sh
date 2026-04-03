@@ -81,50 +81,73 @@ else
     gp="disabled"
 fi
 
-# ── AWS auto-reconnect (if dropped unexpectedly) ─────────
-RECONNECT_FLAG="$VPN_DIR/run/aws-auto-reconnect"
-RECONNECT_LOCK="$VPN_DIR/run/reconnect.lock"
-RECONNECT_FAIL_FILE="$VPN_DIR/run/reconnect-failures"
-RECONNECT_MAX=3
-RECONNECT_COOLDOWN=300  # 5 min between retries
-if [[ "$aws" == "disconnected" ]] && [[ -f "$RECONNECT_FLAG" ]]; then
+# ── Auto-reconnect helper ─────────────────────────────────
+# Usage: auto_reconnect <vpn-name> <flag-file> <lock-file> <fail-file> <up-command>
+# Sets the status variable (by name) to "reconnecting" / "no-sudo" as needed.
+auto_reconnect() {
+    local name="$1" flag="$2" lock="$3" fail_file="$4" up_cmd="$5"
+    local max_retries=3 cooldown=300  # 5 min between retries
+
     if ! [ -f /etc/sudoers.d/vpn ] && ! [ -f /etc/sudoers.d/vpn-aws ]; then
-        # Passwordless sudo not configured — can't reconnect without terminal
-        aws="no-sudo"
-    else
-        failures=$(cat "$RECONNECT_FAIL_FILE" 2>/dev/null || echo 0)
-        if (( failures >= RECONNECT_MAX )); then
-            # Max retries — give up, preserve Tailscale stability
-            rm -f "$RECONNECT_FLAG" "$RECONNECT_FAIL_FILE"
-        elif [[ -f "$RECONNECT_FAIL_FILE" ]] && \
-             (( $(date +%s) - $(stat -f %m "$RECONNECT_FAIL_FILE") < RECONNECT_COOLDOWN )); then
-            # Cooldown active — skip this cycle
-            :
-        else
-            reconnect_pid=$(cat "$RECONNECT_LOCK" 2>/dev/null) || true
-            if [[ -n "$reconnect_pid" ]] && kill -0 "$reconnect_pid" 2>/dev/null; then
-                aws="reconnecting"
-            else
-                nohup bash -c '
-                    echo $$ > "$3"
-                    if "$1" aws-up &>"$2"; then
-                        rm -f "$4"
-                    else
-                        prev=$(cat "$4" 2>/dev/null || echo 0)
-                        echo $((prev + 1)) > "$4"
-                    fi
-                    rm -f "$3"
-                ' _ "$VPN" "$VPN_DIR/run/reconnect.log" "$RECONNECT_LOCK" "$RECONNECT_FAIL_FILE" </dev/null &
-                aws="reconnecting"
-            fi
-        fi
+        echo "no-sudo"; return
     fi
+
+    local failures
+    failures=$(cat "$fail_file" 2>/dev/null || echo 0)
+    if (( failures >= max_retries )); then
+        rm -f "$flag" "$fail_file"
+        echo "gave-up"; return
+    fi
+    if [[ -f "$fail_file" ]] && \
+       (( $(date +%s) - $(stat -f %m "$fail_file") < cooldown )); then
+        echo "cooldown"; return
+    fi
+
+    local reconnect_pid
+    reconnect_pid=$(cat "$lock" 2>/dev/null) || true
+    if [[ -n "$reconnect_pid" ]] && kill -0 "$reconnect_pid" 2>/dev/null; then
+        echo "reconnecting"; return
+    fi
+
+    nohup bash -c '
+        echo $$ > "$3"
+        if "$1" "$5" &>"$2"; then
+            rm -f "$4"
+        else
+            prev=$(cat "$4" 2>/dev/null || echo 0)
+            echo $((prev + 1)) > "$4"
+        fi
+        rm -f "$3"
+    ' _ "$VPN" "$VPN_DIR/run/reconnect-${name}.log" "$lock" "$fail_file" "$up_cmd" </dev/null &
+    echo "reconnecting"
+}
+
+# ── AWS auto-reconnect (if dropped unexpectedly) ─────────
+AWS_RECONNECT_FLAG="$VPN_DIR/run/aws-auto-reconnect"
+AWS_RECONNECT_LOCK="$VPN_DIR/run/reconnect-aws.lock"
+AWS_RECONNECT_FAIL="$VPN_DIR/run/reconnect-aws-failures"
+if [[ "$aws" == "disconnected" ]] && [[ -f "$AWS_RECONNECT_FLAG" ]]; then
+    aws=$(auto_reconnect "aws" "$AWS_RECONNECT_FLAG" "$AWS_RECONNECT_LOCK" "$AWS_RECONNECT_FAIL" "aws-up")
+fi
+
+# ── GP auto-reconnect (if crashed, e.g. network change) ──
+GP_RECONNECT_FLAG="$VPN_DIR/run/gp-auto-reconnect"
+GP_RECONNECT_LOCK="$VPN_DIR/run/reconnect-gp.lock"
+GP_RECONNECT_FAIL="$VPN_DIR/run/reconnect-gp-failures"
+if [[ "$GP_ENABLED" == "true" ]] && [[ "$gp" == "disconnected" ]] && [[ -f "$GP_RECONNECT_FLAG" ]]; then
+    # Clean up stale resolver/hosts from crashed openconnect
+    for domain in ofsz.local ofsz.hu; do
+        [ -f "/etc/resolver/$domain" ] && sudo rm -f "/etc/resolver/$domain" 2>/dev/null || true
+    done
+    sudo sed -i '' '/vpn\.ofsz\.hu/d' /etc/hosts 2>/dev/null || true
+
+    gp=$(auto_reconnect "gp" "$GP_RECONNECT_FLAG" "$GP_RECONNECT_LOCK" "$GP_RECONNECT_FAIL" "gp-up")
 fi
 
 status_color() {
     case "$1" in
         connected)              echo "#33CC33" ;;
-        disconnected|stopped)    echo "#FF3B30" ;;
+        disconnected|stopped|gave-up|cooldown) echo "#FF3B30" ;;
         connecting|reconnecting) echo "#E6B310" ;;
         no-sudo)                 echo "#FF6B00" ;;
         not-running)             echo "#888888" ;;

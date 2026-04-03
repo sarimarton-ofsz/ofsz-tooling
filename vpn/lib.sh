@@ -127,7 +127,7 @@ aws_vpn_up() {
     if [ "$(aws_vpn_status)" = "connected" ]; then
         ok "AWS VPN: already connected"
         touch "$AWS_VPN_RECONNECT_FLAG"
-        rm -f "$DATA_DIR/run/reconnect-failures"
+        rm -f "$DATA_DIR/run/reconnect-aws-failures"
         return 0
     fi
 
@@ -146,7 +146,7 @@ aws_vpn_up() {
     log "AWS VPN: connecting via CLI (SAML)..."
     if "$SCRIPT_DIR/aws-connect.sh" up; then
         touch "$AWS_VPN_RECONNECT_FLAG"
-        rm -f "$DATA_DIR/run/reconnect-failures"
+        rm -f "$DATA_DIR/run/reconnect-aws-failures"
         if $ts_was_up; then
             ts_watchdog_stop
             log "Restoring Tailscale..."
@@ -185,6 +185,7 @@ GP_DNS_SERVERS=("10.10.122.6" "10.10.122.7")
 GP_DNS_DOMAINS=("ofsz.local" "ofsz.hu")
 GP_PID_FILE="$DATA_DIR/run/globalprotect.pid"
 GP_LOG_FILE="$DATA_DIR/run/globalprotect.log"
+GP_RECONNECT_FLAG="$DATA_DIR/run/gp-auto-reconnect"
 GP_KEYCHAIN_PASSWORD="vpn-gp"
 GP_KEYCHAIN_USER="vpn-gp-user"
 OPENCONNECT_BIN="$(command -v openconnect 2>/dev/null || echo /opt/homebrew/bin/openconnect)"
@@ -222,6 +223,23 @@ gp_status() {
         return
     fi
     echo "disconnected"
+}
+
+gp_cleanup_stale() {
+    # Clean up leftover state from a crashed openconnect session.
+    # Called when GP is detected as disconnected but resolver/hosts entries remain.
+    local cleaned=false
+    for domain in "${GP_DNS_DOMAINS[@]}"; do
+        if [ -f "/etc/resolver/$domain" ]; then
+            sudo rm -f "/etc/resolver/$domain" 2>/dev/null || true
+            cleaned=true
+        fi
+    done
+    if grep -q "$GP_PORTAL" /etc/hosts 2>/dev/null; then
+        sudo sed -i '' "/$GP_PORTAL/d" /etc/hosts 2>/dev/null || true
+        cleaned=true
+    fi
+    $cleaned && log "GlobalProtect: cleaned up stale DNS/hosts from crashed session"
 }
 
 gp_up() {
@@ -319,6 +337,7 @@ gp_up() {
     local i=0
     while [ $i -lt 10 ]; do
         if [ "$(gp_status)" = "connected" ]; then
+            touch "$GP_RECONNECT_FLAG"
             ok "GlobalProtect: connected"
             return 0
         fi
@@ -330,6 +349,7 @@ gp_up() {
 }
 
 gp_down() {
+    rm -f "$GP_RECONNECT_FLAG"
     if [ "$(gp_status)" = "disconnected" ]; then
         ok "GlobalProtect: already disconnected"
         return 0

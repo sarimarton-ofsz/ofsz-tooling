@@ -59,6 +59,7 @@ cmd_status() {
 cmd_kill_all() {
     warn "Disconnecting all VPNs..."
     rm -f "$AWS_VPN_RECONNECT_FLAG"
+    rm -f "$GP_RECONNECT_FLAG"
     local failed=0
     ts_down  || failed=1
     aws_vpn_down || failed=1
