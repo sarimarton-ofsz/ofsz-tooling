@@ -172,5 +172,9 @@ else
         "" \
         "Fix warnings above, then re-run the installer."
 fi
+
+# Refresh SwiftBar plugins so menu bar reflects the new version immediately
+open -gj "swiftbar://refreshplugin?name=vpn.30s" 2>/dev/null || true
+
 echo ""
 }

@@ -230,3 +230,5 @@ echo "Reconnect All | bash=$VPN param1=preset param2=all terminal=true refresh=t
 echo "Kill All | bash=$VPN param1=kill-all terminal=true refresh=true color=#FF3B30"
 echo "---"
 echo "Diagnostics | bash=$VPN param1=check terminal=true color=#888888"
+version=$(git -C "$SCRIPT_DIR" describe --tags --always 2>/dev/null || echo "?")
+echo "v${version#v} | size=11 color=#888888 disabled=true"
