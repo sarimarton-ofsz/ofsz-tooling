@@ -160,6 +160,16 @@ if [ -d "$SWIFTBAR_PLUGINS" ] && [ -f "$SWIFTBAR_SRC" ]; then
     open -a SwiftBar
     sleep 2
     gum log --level info --prefix "✓" "SwiftBar plugin symlinked + restarted"
+
+# ── SwiftBar: Launch at Login ──────────────────────────────
+# Ensure the VPN menu bar icon reappears after reboot.
+if ! osascript -e 'tell application "System Events" to get the name of every login item' 2>/dev/null | grep -q "SwiftBar"; then
+    osascript -e 'tell application "System Events" to make login item at end with properties {path:"/Applications/SwiftBar.app", hidden:false}' 2>/dev/null && \
+        gum log --level info --prefix "✓" "SwiftBar: added to Login Items (auto-start on reboot)" || \
+        gum log --level warn "SwiftBar: could not add to Login Items — add manually: System Settings → General → Login Items"
+else
+    gum log --level info --prefix "✓" "SwiftBar: already in Login Items"
+fi
 fi
 
 # ── Prerequisites ────────────────────────────────────────
