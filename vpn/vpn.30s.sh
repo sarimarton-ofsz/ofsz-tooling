@@ -86,7 +86,7 @@ fi
 # Sets the status variable (by name) to "reconnecting" / "no-sudo" as needed.
 auto_reconnect() {
     local name="$1" flag="$2" lock="$3" fail_file="$4" up_cmd="$5"
-    local max_retries=3 cooldown=300  # 5 min between retries
+    local max_retries=5 cooldown=60  # 1 min between retries
 
     if ! [ -f /etc/sudoers.d/vpn ] && ! [ -f /etc/sudoers.d/vpn-aws ]; then
         echo "no-sudo"; return
@@ -111,6 +111,7 @@ auto_reconnect() {
 
     nohup bash -c '
         echo $$ > "$3"
+        sleep 10  # wait for network to stabilize after interface change
         if "$1" "$5" &>"$2"; then
             rm -f "$4"
         else
@@ -130,17 +131,19 @@ if [[ "$aws" == "disconnected" ]] && [[ -f "$AWS_RECONNECT_FLAG" ]]; then
     aws=$(auto_reconnect "aws" "$AWS_RECONNECT_FLAG" "$AWS_RECONNECT_LOCK" "$AWS_RECONNECT_FAIL" "aws-up")
 fi
 
+# ── GP stale cleanup (always, even after gave-up) ───────
+if [[ "$GP_ENABLED" == "true" ]] && [[ "$gp" == "disconnected" ]]; then
+    for domain in ofsz.local ofsz.hu; do
+        [ -f "/etc/resolver/$domain" ] && sudo rm -f "/etc/resolver/$domain" 2>/dev/null || true
+    done
+    sudo sed -i '' '/vpn\.ofsz\.hu/d' /etc/hosts 2>/dev/null || true
+fi
+
 # ── GP auto-reconnect (if crashed, e.g. network change) ──
 GP_RECONNECT_FLAG="$VPN_DIR/run/gp-auto-reconnect"
 GP_RECONNECT_LOCK="$VPN_DIR/run/reconnect-gp.lock"
 GP_RECONNECT_FAIL="$VPN_DIR/run/reconnect-gp-failures"
 if [[ "$GP_ENABLED" == "true" ]] && [[ "$gp" == "disconnected" ]] && [[ -f "$GP_RECONNECT_FLAG" ]]; then
-    # Clean up stale resolver/hosts from crashed openconnect
-    for domain in ofsz.local ofsz.hu; do
-        [ -f "/etc/resolver/$domain" ] && sudo rm -f "/etc/resolver/$domain" 2>/dev/null || true
-    done
-    sudo sed -i '' '/vpn\.ofsz\.hu/d' /etc/hosts 2>/dev/null || true
-
     gp=$(auto_reconnect "gp" "$GP_RECONNECT_FLAG" "$GP_RECONNECT_LOCK" "$GP_RECONNECT_FAIL" "gp-up")
 fi
 
