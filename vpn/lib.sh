@@ -327,6 +327,7 @@ gp_up() {
         --script="$SCRIPT_DIR/gp-vpnc-script.sh" \
         --background \
         --pid-file="$GP_PID_FILE" \
+        --reconnect-timeout=0 \
         "$GP_PORTAL" \
         >> "$GP_LOG_FILE" 2>&1; then
         err "GlobalProtect: openconnect failed (see $GP_LOG_FILE)"
