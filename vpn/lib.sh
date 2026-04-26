@@ -173,9 +173,14 @@ aws_vpn_up() {
     # that conflict. Tailscale is restored after successful connect.
     # Safety: a watchdog timer ensures Tailscale is restored within 3 minutes
     # even if the AWS Entra SAML flow hangs or crashes.
-    local ts_was_up=false
+    local ts_was_up=false ts_exit_was=""
     if [ "$(ts_status)" = "connected" ]; then
         ts_was_up=true
+        # Capture active exit node (if any) so we can restore it after the
+        # ts_up below — `tailscale up` alone does not re-enable exit-node
+        # routing, and losing it silently breaks anything tunnelled through
+        # the exit node (e.g. a GP session reachable only via magyar IP).
+        ts_exit_was=$(ts_exit_node_current)
         log "Tailscale is up — disconnecting before AWS connect..."
         ts_down || true
         ts_watchdog_start
@@ -189,6 +194,10 @@ aws_vpn_up() {
             ts_watchdog_stop
             log "Restoring Tailscale..."
             ts_up || err "Tailscale restore failed after AWS connect"
+            if [ -n "$ts_exit_was" ]; then
+                log "Restoring exit node: $ts_exit_was"
+                ts_exit_on "$ts_exit_was" || warn "Exit node restore failed"
+            fi
         fi
         return 0
     fi
@@ -198,6 +207,7 @@ aws_vpn_up() {
         ts_watchdog_stop
         log "AWS failed — restoring Tailscale..."
         ts_up || true
+        [ -n "$ts_exit_was" ] && { ts_exit_on "$ts_exit_was" || true; }
     fi
     return 1
 }
