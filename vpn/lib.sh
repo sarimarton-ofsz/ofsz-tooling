@@ -352,6 +352,18 @@ gp_up() {
     # on connect() to that IP. Pre-emptively clearing it lets pre-init succeed.
     sudo route -n delete -host "$portal_ip" 2>/dev/null || true
 
+    # Pre-flight TCP/443 reachability probe. Some networks (e.g. certain ISPs)
+    # silently DROP forwarded packets to the GP gateway IP — openconnect would
+    # eventually time out, but logging a clear hint up front (and pointing at
+    # the exit-node workaround) is far friendlier than a 30s wait + cryptic log.
+    if ! nc -z -G 3 -w 3 "$portal_ip" 443 2>/dev/null; then
+        err "GlobalProtect: portal $GP_PORTAL ($portal_ip) not reachable on TCP/443 from this network"
+        if [ -z "$(ts_exit_node_current)" ]; then
+            warn "Network filter likely blocking — try 'vpn exit on', then retry"
+        fi
+        return 1
+    fi
+
     # Set up /etc/resolver/ files for split-DNS (macOS native per-domain DNS).
     # The vpnc-script wrapper strips DNS vars so openconnect won't override
     # system DNS; these files route only corporate domains to corporate DNS.

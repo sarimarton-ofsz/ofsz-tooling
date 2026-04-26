@@ -284,6 +284,7 @@ case "${1:-}" in
             "$USER" "/usr/bin/sed" \
             "$USER" "/usr/sbin/dscacheutil" \
             "$USER" "/usr/bin/killall" \
+            "$USER" "/usr/bin/pkill" \
             "$USER" "/sbin/route")
         if [ -f "$sudoers_file" ]; then
             current=$(sudo cat "$sudoers_file" 2>/dev/null)
@@ -306,6 +307,7 @@ case "${1:-}" in
         echo "    $USER ALL=(ALL) NOPASSWD: /usr/bin/sed *"
         echo "    $USER ALL=(ALL) NOPASSWD: /usr/sbin/dscacheutil *"
         echo "    $USER ALL=(ALL) NOPASSWD: /usr/bin/killall *"
+        echo "    $USER ALL=(ALL) NOPASSWD: /usr/bin/pkill *"
         echo "    $USER ALL=(ALL) NOPASSWD: /sbin/route *"
         echo ""
         echo -n "Continue? [y/N] "
