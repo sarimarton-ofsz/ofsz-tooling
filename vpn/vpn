@@ -17,6 +17,9 @@ Status:
 Individual VPN control:
   ts-up           Connect Tailscale
   ts-down         Disconnect Tailscale
+  exit on [node]  Route all traffic via Tailscale exit node (default: $TS_EXIT_NODE_DEFAULT)
+  exit off        Disable Tailscale exit node
+  exit status     Show current exit node state
   aws-up          Connect AWS VPN (cycles Tailscale if needed)
   aws-down        Disconnect AWS VPN
 EOF
@@ -223,6 +226,21 @@ case "${1:-}" in
     routes)     route_snapshot ;;
     ts-up)      ts_up ;;
     ts-down)    ts_down ;;
+    exit)
+        case "${2:-status}" in
+            on)      ts_exit_on "${3:-}" ;;
+            off)     ts_exit_off ;;
+            status)
+                name=$(ts_exit_node_current)
+                if [ -n "$name" ]; then
+                    echo "Exit node: $name"
+                else
+                    echo "Exit node: off"
+                fi
+                ;;
+            *) err "Usage: vpn exit [on|off|status]"; exit 1 ;;
+        esac
+        ;;
     aws-up)     aws_vpn_up ;;
     aws-down)   aws_vpn_down ;;
     gp-up)      gp_guard; gp_up ;;

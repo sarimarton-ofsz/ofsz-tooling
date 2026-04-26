@@ -92,6 +92,44 @@ ts_watchdog_stop() {
     fi
 }
 
+# ── Tailscale exit node ────────────────────────────────────────────
+TS_EXIT_NODE_DEFAULT="${TS_EXIT_NODE_DEFAULT:-neobank-ci}"
+
+ts_exit_node_current() {
+    # Prints the hostname of the currently active exit node, empty if none.
+    "$TS_CLI" status --json 2>/dev/null | python3 -c '
+import json, sys
+try: d = json.load(sys.stdin)
+except Exception: sys.exit(0)
+en = d.get("ExitNodeStatus") or {}
+eid = en.get("ID", "")
+if not eid: sys.exit(0)
+for p in (d.get("Peer") or {}).values():
+    if p.get("ID") == eid:
+        print(p.get("HostName") or (p.get("DNSName") or "").split(".")[0])
+        break
+' 2>/dev/null
+}
+
+ts_exit_on() {
+    local node="${1:-$TS_EXIT_NODE_DEFAULT}"
+    log "Tailscale: exit node → $node (LAN access allowed)"
+    if ! "$TS_CLI" set --exit-node="$node" --exit-node-allow-lan-access=true 2>&1; then
+        err "Failed to set exit node to '$node'. Is it advertising and approved in the admin console?"
+        return 1
+    fi
+    ok "Exit node: $node"
+}
+
+ts_exit_off() {
+    log "Tailscale: disabling exit node..."
+    if ! "$TS_CLI" set --exit-node= 2>&1; then
+        err "Failed to clear exit node"
+        return 1
+    fi
+    ok "Exit node: off"
+}
+
 # ── AWS VPN Client ──────────────────────────────────────────────────
 # Uses aws-connect.sh (CLI openvpn + SAML capture) instead of the GUI app.
 AWS_VPN_PID_FILE="$DATA_DIR/run/openvpn.pid"

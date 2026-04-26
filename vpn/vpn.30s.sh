@@ -40,6 +40,22 @@ fast_aws_status() {
     echo "disconnected"
 }
 
+fast_ts_exit_node() {
+    # Prints the active exit node hostname, or empty.
+    "$TS_CLI" status --json 2>/dev/null | python3 -c '
+import json, sys
+try: d = json.load(sys.stdin)
+except Exception: sys.exit(0)
+en = d.get("ExitNodeStatus") or {}
+eid = en.get("ID", "")
+if not eid: sys.exit(0)
+for p in (d.get("Peer") or {}).values():
+    if p.get("ID") == eid:
+        print(p.get("HostName") or (p.get("DNSName") or "").split(".")[0])
+        break
+' 2>/dev/null
+}
+
 fast_gp_status() {
     local pid
     pid=$(cat "$VPN_DIR/run/globalprotect.pid" 2>/dev/null) || true
@@ -222,6 +238,12 @@ ts_extra=""
 if [[ "$ts" == "connected" ]]; then
     echo "Tailscale | size=13 color=$(status_color "$ts") checked=true badge=$ts_iface bash=$VPN param1=ts-down terminal=false refresh=true${ts_extra}"
     echo "Tailscale (verbose) | size=13 color=$(status_color "$ts") checked=true bash=$VPN param1=ts-down terminal=true refresh=true alternate=true"
+    ts_exit=$(fast_ts_exit_node)
+    if [[ -n "$ts_exit" ]]; then
+        echo "  ↳ Exit node: $ts_exit | size=12 color=#33CC33 bash=$VPN param1=exit param2=off terminal=false refresh=true"
+    else
+        echo "  ↳ Exit node: off | size=12 color=#888888 bash=$VPN param1=exit param2=on terminal=false refresh=true"
+    fi
 else
     echo "Tailscale | size=13 color=$(status_color "$ts") bash=$VPN param1=ts-up terminal=false refresh=true"
     echo "Tailscale (verbose) | size=13 color=$(status_color "$ts") bash=$VPN param1=ts-up terminal=true refresh=true alternate=true"
