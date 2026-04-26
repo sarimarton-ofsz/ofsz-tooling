@@ -344,6 +344,14 @@ gp_up() {
             || warn "Could not add $GP_PORTAL to /etc/hosts (no sudo?)"
     fi
 
+    # Remove any stale host-route to the portal IP from a crashed previous
+    # session. openconnect's vpnc-script installs a UGHS host-route during
+    # pre-init; if the session aborts before disconnect-cleanup runs (or the
+    # network changed underneath, e.g. WiFi → mobile hotspot), the stale route
+    # points at a now-invalid gateway and the macOS kernel returns EADDRNOTAVAIL
+    # on connect() to that IP. Pre-emptively clearing it lets pre-init succeed.
+    sudo route -n delete -host "$portal_ip" 2>/dev/null || true
+
     # Set up /etc/resolver/ files for split-DNS (macOS native per-domain DNS).
     # The vpnc-script wrapper strips DNS vars so openconnect won't override
     # system DNS; these files route only corporate domains to corporate DNS.
