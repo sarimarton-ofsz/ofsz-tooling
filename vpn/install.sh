@@ -80,7 +80,12 @@ else
         gp_user="$HAVE_GP_USER"
         gum log --level info --prefix "·" "GP user: $gp_user (keychain)"
     else
-        gp_user=$(gum input --prompt "GP felhasználónév (pl. vezeteknev_keresztnev): " --width 60)
+        # Pre-fill from the email's local part with dots → underscores,
+        # which matches the OFSZ GP username convention (e.g.
+        # sari.marton@... → sari_marton). User can edit if it differs.
+        suggested_gp_user="${email%%@*}"
+        suggested_gp_user="${suggested_gp_user//./_}"
+        gp_user=$(gum input --prompt "GP felhasználónév: " --value "$suggested_gp_user" --width 60)
         gum log --level info --prefix "·" "GP user: $gp_user"
     fi
     pw=$(gum input --password --prompt "Céges jelszó (Microsoft): " --width 60)
