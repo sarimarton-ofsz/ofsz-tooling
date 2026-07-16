@@ -231,6 +231,13 @@ GP_PORTAL="vpn.ofsz.hu"
 GP_GATEWAY="OFSZ_GW"
 GP_DNS_SERVERS=("10.10.122.6" "10.10.122.7")
 GP_DNS_DOMAINS=("ofsz.local" "ofsz.hu")
+# Public-key pin of the portal's TLS cert. The server doesn't send the full
+# e-Szigno chain, so GnuTLS-based openconnect fails with "signer not found"
+# and would prompt interactively (which breaks --passwd-on-stdin). The pin
+# survives cert renewals with the same key; on key rotation openconnect
+# aborts with a clear log line — update the pin here (it prints the new one),
+# or override via GP_SERVERCERT env.
+GP_SERVERCERT="${GP_SERVERCERT:-pin-sha256:LlpqmnmxjtMv8ni12g2yn2hJQ1hL7W0aOSauJCrJ244=}"
 GP_PID_FILE="$DATA_DIR/run/globalprotect.pid"
 GP_LOG_FILE="$DATA_DIR/run/globalprotect.log"
 GP_RECONNECT_FLAG="$DATA_DIR/run/gp-auto-reconnect"
@@ -392,6 +399,7 @@ gp_up() {
         --protocol=gp \
         --user="$user" \
         --passwd-on-stdin \
+        --servercert="$GP_SERVERCERT" \
         --script="$SCRIPT_DIR/gp-vpnc-script.sh" \
         --background \
         --pid-file="$GP_PID_FILE" \
