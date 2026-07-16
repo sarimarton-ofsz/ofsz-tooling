@@ -3,10 +3,11 @@
 # Can also be run standalone: bash vpn/uninstall.sh
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DATA_DIR="$HOME/.config/ofsz-tooling/vpn"
 SWIFTBAR_LINK="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || echo "$HOME/Library/Application Support/SwiftBar/Plugins")/vpn.30s.sh"
-SUDOERS_FILE="/etc/sudoers.d/vpn"
-SUDOERS_FILE_OLD="/etc/sudoers.d/vpn-aws"
+# SUDOERS_FILE / SUDOERS_FILE_OLD + removal logic come from sudoers.sh
+source "$SCRIPT_DIR/sudoers.sh"
 
 # Ensure gum is available
 if ! command -v gum &>/dev/null; then
@@ -18,16 +19,16 @@ fi
 # AWS VPN daemon
 aws_pid=$(pgrep -f "acvc-openvpn.*aws-vpn-cli" 2>/dev/null | head -1) || true
 if [ -n "$aws_pid" ]; then
-    sudo kill "$aws_pid" 2>/dev/null || kill "$aws_pid" 2>/dev/null || true
+    sudo -n kill "$aws_pid" 2>/dev/null || kill "$aws_pid" 2>/dev/null || true
     gum log --level info --prefix "✓" "AWS VPN stopped"
 fi
 # GlobalProtect (openconnect) daemon
 gp_pid=$(cat "$DATA_DIR/run/globalprotect.pid" 2>/dev/null) || true
 if [ -n "$gp_pid" ] && ps -p "$gp_pid" &>/dev/null; then
-    sudo kill "$gp_pid" 2>/dev/null || true
+    sudo -n kill "$gp_pid" 2>/dev/null || true
     gum log --level info --prefix "✓" "GlobalProtect stopped"
 fi
-sudo pkill -f "openconnect.*--protocol=gp" 2>/dev/null || true
+sudo -n pkill -f "openconnect.*--protocol=gp" 2>/dev/null || true
 # SwiftBar (only stop if no other plugins remain after removing ours)
 SWIFTBAR_DIR="$(dirname "$SWIFTBAR_LINK")"
 other_plugins=$(find "$SWIFTBAR_DIR" -maxdepth 1 -name '*.sh' ! -name 'vpn.30s.sh' 2>/dev/null | head -1)
@@ -55,12 +56,15 @@ else
 fi
 
 # ── 3. Remove sudoers config ────────────────────────────
-for sf in "$SUDOERS_FILE" "$SUDOERS_FILE_OLD"; do
-    if [ -f "$sf" ]; then
-        sudo rm -f "$sf"
-        gum log --level info --prefix "✓" "Sudoers config removed ($sf)"
+# The current template NOPASSWD's /bin/rm, so this is passwordless;
+# older templates escalate via sudo (admin) or the macOS admin dialog.
+if [ -f "$SUDOERS_FILE" ] || [ -f "$SUDOERS_FILE_OLD" ]; then
+    if sudoers_remove; then
+        gum log --level info --prefix "✓" "Sudoers config removed"
+    else
+        gum log --level warn "Sudoers config not removed — manually: sudo rm -f $SUDOERS_FILE $SUDOERS_FILE_OLD"
     fi
-done
+fi
 
 # ── 4. Remove credentials from keychain ──────────────────
 for entry in "vpn-gp:GlobalProtect password" "vpn-gp-user:GlobalProtect username" "vpn-entra:Entra email" "vpn-watchguard:WatchGuard password (legacy)"; do

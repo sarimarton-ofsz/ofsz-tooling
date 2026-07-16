@@ -27,7 +27,7 @@ warn_prereq() {
 
 # ── 1. Permissions & runtime dir ─────────────────────────
 chmod +x "$TOOL_DIR/vpn" "$TOOL_DIR/aws-connect.sh" "$TOOL_DIR/lib.sh"
-chmod +x "$TOOL_DIR/vpn.30s.sh" "$TOOL_DIR/gp-vpnc-script.sh"
+chmod +x "$TOOL_DIR/vpn.30s.sh" "$TOOL_DIR/gp-vpnc-script.sh" "$TOOL_DIR/sudoers.sh"
 mkdir -p "$DATA_DIR/run"
 
 gum log --level info --prefix "✓" "VPN scripts at $TOOL_DIR"
@@ -224,24 +224,18 @@ else
 fi
 
 # ── 9. Sudoers: auto-setup for VPN tools ─────────────────
-sudoers_file="/etc/sudoers.d/vpn"
-# Migrate old file name
-[ -f /etc/sudoers.d/vpn-aws ] && sudo rm -f /etc/sudoers.d/vpn-aws
-openconnect_bin="$(command -v openconnect 2>/dev/null || echo /opt/homebrew/bin/openconnect)"
+# Content is generated/compared/written via the shared sudoers.sh —
+# works from a non-admin user too (macOS admin dialog / su recipe).
+source "$TOOL_DIR/sudoers.sh"
 if [ -x "$OVPN_BIN" ]; then
-    if [ -f "$sudoers_file" ]; then
+    if [ "$(sudoers_status)" = "current" ]; then
         gum log --level info --prefix "✓" "VPN sudoers: configured"
     else
-        ovpn_bin_escaped="${OVPN_BIN// /\\ }"
         gum log --level info "Configuring passwordless sudo for VPN tools..."
-        printf '%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: %s *\n%s ALL=(ALL) NOPASSWD: /bin/kill *\n' \
-            "$USER" "$ovpn_bin_escaped" "$USER" "$openconnect_bin" "$USER" | sudo tee "$sudoers_file" > /dev/null
-        sudo chmod 440 "$sudoers_file"
-        if sudo visudo -cf "$sudoers_file"; then
+        if sudoers_write; then
             gum log --level info --prefix "✓" "VPN sudoers: configured"
         else
-            gum log --level error "Sudoers syntax error — removing broken file"
-            sudo rm -f "$sudoers_file"
+            gum log --level error "Sudoers setup failed — run 'vpn setup' later (recept fentebb)"
             failed=1
         fi
     fi

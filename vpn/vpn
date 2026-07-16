@@ -258,65 +258,36 @@ case "${1:-}" in
         gp_store_credentials "$gp_user" "$gp_pw"
         ;;
     setup|setup-sudoers)
-        ovpn_bin="/Applications/AWS VPN Client/AWS VPN Client.app/Contents/Resources/openvpn/acvc-openvpn"
-        openconnect_bin="$(command -v openconnect 2>/dev/null || echo /opt/homebrew/bin/openconnect)"
-        sudoers_file="/etc/sudoers.d/vpn"
-        if [ ! -x "$ovpn_bin" ]; then
+        source "$SCRIPT_DIR/sudoers.sh"
+        if [ ! -x "$SUDOERS_OVPN_BIN" ]; then
             err "AWS VPN Client not installed — install it first"
             err "  https://self-service.clientvpn.amazonaws.com/endpoints/cvpn-endpoint-022755a701a9c6b8c"
             exit 1
         fi
-        if [ ! -x "$openconnect_bin" ]; then
+        if [ ! -x "$(_sudoers_openconnect_bin)" ]; then
             err "openconnect not installed — run: brew install openconnect"
             exit 1
         fi
-        # Migrate old sudoers file if present
-        [ -f /etc/sudoers.d/vpn-aws ] && sudo rm -f /etc/sudoers.d/vpn-aws
-        ovpn_bin_escaped="${ovpn_bin// /\\ }"
-        # Build expected sudoers content
-        expected_sudoers=$(printf '%s ALL=(ALL) NOPASSWD: %s *\n' \
-            "$USER" "$ovpn_bin_escaped" \
-            "$USER" "$openconnect_bin" \
-            "$USER" "/bin/kill" \
-            "$USER" "/usr/bin/tee" \
-            "$USER" "/bin/mkdir" \
-            "$USER" "/bin/rm" \
-            "$USER" "/usr/bin/sed" \
-            "$USER" "/usr/sbin/dscacheutil" \
-            "$USER" "/usr/bin/killall" \
-            "$USER" "/usr/bin/pkill" \
-            "$USER" "/sbin/route")
-        if [ -f "$sudoers_file" ]; then
-            current=$(sudo cat "$sudoers_file" 2>/dev/null)
-            if [ "$current" = "$expected_sudoers" ]; then
-                ok "Passwordless sudo already configured — nothing to do"
-                exit 0
-            fi
-            warn "Sudoers file exists but is outdated — updating"
+        status="$(sudoers_status)"
+        if [ "$status" = "current" ]; then
+            ok "Passwordless sudo already configured — nothing to do"
+            exit 0
         fi
+        [ "$status" = "outdated" ] && warn "Sudoers file exists but is outdated — updating"
         echo "This will allow passwordless sudo for VPN tools."
         echo ""
-        echo "  File: $sudoers_file"
+        echo "  File: $SUDOERS_FILE"
         echo "  Rules:"
-        echo "    $USER ALL=(ALL) NOPASSWD: $ovpn_bin_escaped *"
-        echo "    $USER ALL=(ALL) NOPASSWD: $openconnect_bin *"
-        echo "    $USER ALL=(ALL) NOPASSWD: /bin/kill *"
-        echo "    $USER ALL=(ALL) NOPASSWD: /usr/bin/tee *"
-        echo "    $USER ALL=(ALL) NOPASSWD: /bin/mkdir *"
-        echo "    $USER ALL=(ALL) NOPASSWD: /bin/rm *"
-        echo "    $USER ALL=(ALL) NOPASSWD: /usr/bin/sed *"
-        echo "    $USER ALL=(ALL) NOPASSWD: /usr/sbin/dscacheutil *"
-        echo "    $USER ALL=(ALL) NOPASSWD: /usr/bin/killall *"
-        echo "    $USER ALL=(ALL) NOPASSWD: /usr/bin/pkill *"
-        echo "    $USER ALL=(ALL) NOPASSWD: /sbin/route *"
+        sudoers_expected_content | sed 's/^/    /'
         echo ""
         echo -n "Continue? [y/N] "
         read -r confirm
         if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-            echo "$expected_sudoers" | sudo tee "$sudoers_file" > /dev/null
-            sudo chmod 440 "$sudoers_file"
-            sudo visudo -cf "$sudoers_file" && ok "Done — VPN tools now work without password prompts" \
-                || { err "sudoers syntax error — removing broken file"; sudo rm -f "$sudoers_file"; }
+            if sudoers_write; then
+                ok "Done — VPN tools now work without password prompts"
+            else
+                exit 1
+            fi
         fi
         ;;
     -h|--help|help|"") usage ;;
