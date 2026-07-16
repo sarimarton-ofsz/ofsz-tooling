@@ -9,4 +9,24 @@
 # macOS reads natively for per-domain resolution.
 unset INTERNAL_IP4_DNS
 unset INTERNAL_IP6_DNS
-exec /opt/homebrew/etc/vpnc/vpnc-script "$@"
+
+# Runs as root (spawned by sudo openconnect), so $HOME is not the user's.
+# User-level homebrew (non-admin machines) lives under the owner's home —
+# derive it from this script's own installed path (/Users/<owner>/...).
+owner_home=""
+case "$0" in
+    /Users/*)
+        rest="${0#/Users/}"
+        owner_home="/Users/${rest%%/*}"
+        ;;
+esac
+
+for vpnc_script in \
+    /opt/homebrew/etc/vpnc/vpnc-script \
+    /usr/local/etc/vpnc/vpnc-script \
+    "$owner_home/homebrew/etc/vpnc/vpnc-script"; do
+    [ -x "$vpnc_script" ] && exec "$vpnc_script" "$@"
+done
+
+echo "gp-vpnc-script: vpnc-script not found (tried /opt/homebrew, /usr/local, $owner_home/homebrew)" >&2
+exit 1

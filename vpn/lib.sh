@@ -317,6 +317,18 @@ gp_up() {
 
     log "GlobalProtect: connecting to $GP_PORTAL..."
 
+    # Fail loudly if no vpnc-script is installed — without it the wrapper
+    # would exec nothing and the tunnel would come up with no routes at all
+    # (openconnect treats a failing --script as non-fatal).
+    local vs found_vs=""
+    for vs in /opt/homebrew/etc/vpnc/vpnc-script /usr/local/etc/vpnc/vpnc-script "$HOME/homebrew/etc/vpnc/vpnc-script"; do
+        [ -x "$vs" ] && { found_vs="$vs"; break; }
+    done
+    if [ -z "$found_vs" ]; then
+        err "GlobalProtect: vpnc-script not found — run: brew reinstall openconnect"
+        return 1
+    fi
+
     # Clean up stale resolver files from a previous session that may have
     # crashed without running gp_down. These files route *.ofsz.hu queries
     # to corporate DNS (10.10.122.x) which is unreachable when GP is down,
