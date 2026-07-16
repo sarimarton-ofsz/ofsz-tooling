@@ -141,14 +141,26 @@ fi
 SWIFTBAR_SRC="$TOOL_DIR/vpn.30s.sh"
 SWIFTBAR_DEST="$SWIFTBAR_PLUGINS/vpn.30s.sh"
 
-if [ ! -d "/Applications/SwiftBar.app" ]; then
+# Homebrew installs the cask to /Applications when writable, otherwise to
+# ~/Applications (non-admin user) — check both. `open` is guarded so a
+# launch hiccup can't abort the installer (set -e).
+swiftbar_app() {
+    local p
+    for p in "/Applications/SwiftBar.app" "$HOME/Applications/SwiftBar.app"; do
+        [ -d "$p" ] && { echo "$p"; return 0; }
+    done
+    return 1
+}
+
+if ! swiftbar_app > /dev/null; then
     gum log --level info "SwiftBar not found — installing..."
     brew install --cask swiftbar
     _mark_dep swiftbar
     mkdir -p "$SWIFTBAR_PLUGINS"
     # Set plugin directory before first launch to skip the directory picker dialog
     defaults write com.ameba.SwiftBar PluginDirectory -string "$SWIFTBAR_PLUGINS"
-    open -a SwiftBar
+    open "$(swiftbar_app)" 2>/dev/null \
+        || gum log --level warn "SwiftBar: nem sikerült elindítani — indítsd el kézzel"
     gum log --level info "  → Ha macOS engedélyt kér a SwiftBar futtatásához, engedélyezd"
     gum confirm "SwiftBar elindult?" --default=yes --affirmative "Igen, mehet tovább" --negative "Nem indult el"
 elif [ ! -d "$SWIFTBAR_PLUGINS" ]; then
@@ -162,14 +174,15 @@ if [ -d "$SWIFTBAR_PLUGINS" ] && [ -f "$SWIFTBAR_SRC" ]; then
     # (swiftbar:// URL scheme doesn't always detect newly added plugins)
     killall SwiftBar 2>/dev/null || true
     sleep 1
-    open -a SwiftBar
+    open "$(swiftbar_app)" 2>/dev/null \
+        || gum log --level warn "SwiftBar: nem sikerült újraindítani — indítsd el kézzel"
     sleep 2
     gum log --level info --prefix "✓" "SwiftBar plugin symlinked + restarted"
 
 # ── SwiftBar: Launch at Login ──────────────────────────────
 # Ensure the VPN menu bar icon reappears after reboot.
 if ! osascript -e 'tell application "System Events" to get the name of every login item' 2>/dev/null | grep -q "SwiftBar"; then
-    osascript -e 'tell application "System Events" to make login item at end with properties {path:"/Applications/SwiftBar.app", hidden:false}' 2>/dev/null && \
+    osascript -e "tell application \"System Events\" to make login item at end with properties {path:\"$(swiftbar_app)\", hidden:false}" 2>/dev/null && \
         gum log --level info --prefix "✓" "SwiftBar: added to Login Items (auto-start on reboot)" || \
         gum log --level warn "SwiftBar: could not add to Login Items — add manually: System Settings → General → Login Items"
 else
