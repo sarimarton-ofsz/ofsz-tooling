@@ -34,28 +34,29 @@ gum log --level info --prefix "✓" "VPN scripts at $TOOL_DIR"
 gum log --level info --prefix "✓" "VPN data at $DATA_DIR"
 
 # ── 2. Add vpn to PATH ──────────────────────────────────
-SHELL_RC=""
-if [ -f "$HOME/.zshrc" ]; then
-    SHELL_RC="$HOME/.zshrc"
-elif [ -f "$HOME/.bashrc" ]; then
-    SHELL_RC="$HOME/.bashrc"
-fi
+# Symlink into ~/.local/bin instead of editing the shell rc — rc files may be
+# dotfiles-managed (tracked in git), so the installer must not write into them.
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+ln -sfn "$TOOL_DIR/vpn" "$BIN_DIR/vpn"
+gum log --level info --prefix "✓" "vpn symlinked into $BIN_DIR"
+case ":$PATH:" in
+    *":$BIN_DIR:"*) ;;
+    *) gum log --level warn "$BIN_DIR is not on PATH — add manually: export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
+esac
 
-PATH_LINE="export PATH=\"$TOOL_DIR:\$PATH\""
-if [ -n "$SHELL_RC" ]; then
-    if ! grep -qF '# OFSZ VPN toolkit' "$SHELL_RC" 2>/dev/null; then
-        {
-            echo ""
-            echo "# OFSZ VPN toolkit"
-            echo "$PATH_LINE"
-        } >> "$SHELL_RC"
-        gum log --level info --prefix "✓" "Added vpn to PATH in $SHELL_RC"
-    else
-        gum log --level info --prefix "✓" "PATH already configured"
+# Migrate: earlier installs appended a PATH line to the shell rc — remove it.
+# Write through the rc with cat instead of sed -i / mv: the rc may be a symlink
+# and replacing it would break dotfiles setups.
+for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+    if [ -f "$rc" ] && grep -qF '# OFSZ VPN toolkit' "$rc" 2>/dev/null; then
+        tmp="$(mktemp)"
+        grep -v -e '# OFSZ VPN toolkit' -e 'ofsz-tooling/vpn' "$rc" > "$tmp" || true
+        cat "$tmp" > "$rc"
+        rm -f "$tmp"
+        gum log --level info --prefix "✓" "Legacy PATH line removed from $rc"
     fi
-else
-    gum log --level warn "Could not detect shell rc — add manually: $PATH_LINE"
-fi
+done
 
 # ── 3. Microsoft (céges) credentials ─────────────────────
 # Used for AWS SAML auth and GlobalProtect. Asked once, stored in keychain.
