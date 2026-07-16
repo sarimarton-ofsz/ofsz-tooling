@@ -128,7 +128,9 @@ auto_reconnect() {
     nohup bash -c '
         echo $$ > "$3"
         sleep 10  # wait for network to stabilize after interface change
-        if "$1" "$5" &>"$2"; then
+        # VPN_NONINTERACTIVE: never pop a login browser window from the
+        # background poller — aws-connect notifies the user instead
+        if VPN_NONINTERACTIVE=1 "$1" "$5" &>"$2"; then
             rm -f "$4"
         else
             prev=$(cat "$4" 2>/dev/null || echo 0)

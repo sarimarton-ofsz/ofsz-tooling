@@ -189,28 +189,30 @@ do_connect() {
         fi
     fi
 
-    # Fallback: automated login with keychain credentials, or interactive
+    # Fallback: visible-browser login. The tenant enforces 2FA, so headless
+    # credential login is impossible — instead pre-fill email+password from
+    # keychain in a headful window; the user only confirms the 2FA prompt.
     if [ ! -s "$SAML_RESPONSE_FILE" ]; then
+        if [ "${VPN_NONINTERACTIVE:-0}" = "1" ]; then
+            # Background context (SwiftBar auto-reconnect) — never pop a
+            # browser window from here, just tell the user what to do.
+            osascript -e 'display notification "Entra session lejárt — kézi (2FA) login kell: vpn aws-up" with title "AWS VPN"' 2>/dev/null || true
+            err "Entra session lejárt — interaktív (2FA) login kell: vpn aws-up"
+            return 1
+        fi
         local email password
         email=$(security find-generic-password -s "vpn-entra" -a "email" -w 2>/dev/null) || true
         password=$(security find-generic-password -s "vpn-gp" -w 2>/dev/null || security find-generic-password -s "vpn-watchguard" -w 2>/dev/null) || true
 
         if [ -n "$email" ] && [ -n "$password" ]; then
-            log "Automatikus Entra login..."
-            if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" login "$saml_url" "$pw_state" "$email" "$password" 2>/dev/null); then
-                ok "SAML response captured!"
-                echo "$saml_response" > "$SAML_RESPONSE_FILE"
-            else
-                warn "Automatikus login sikertelen — interaktív fallback"
-            fi
+            log "Entra login (böngészőablak) — az adatok előtöltve, csak a 2FA-t hagyd jóvá..."
+        else
+            log "Entra login (böngészőablak) — jelentkezz be kézzel..."
         fi
-
-        if [ ! -s "$SAML_RESPONSE_FILE" ]; then
-            log "Interaktív Entra login..."
-            if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" login "$saml_url" "$pw_state"); then
-                ok "SAML response captured!"
-                echo "$saml_response" > "$SAML_RESPONSE_FILE"
-            fi
+        osascript -e 'display notification "Jóváhagyás szükséges a böngészőablakban (2FA)" with title "AWS VPN"' 2>/dev/null || true
+        if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" login "$saml_url" "$pw_state" "$email" "$password"); then
+            ok "SAML response captured!"
+            echo "$saml_response" > "$SAML_RESPONSE_FILE"
         fi
     fi
 

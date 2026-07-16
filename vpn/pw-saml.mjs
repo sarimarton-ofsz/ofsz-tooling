@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // pw-saml.mjs — Playwright-based SAML auth for AWS VPN
 // Usage:
-//   node pw-saml.mjs login  <saml-url> <state-file>   Interactive login + SAML capture
+//   node pw-saml.mjs login  <saml-url> <state-file> [email] [password]
+//       Visible-browser login + SAML capture. Credentials are pre-filled
+//       when given; the user completes the 2FA prompt in the window.
 //   node pw-saml.mjs saml   <saml-url> <state-file>   Headless SAML capture, outputs token
 
 import { chromium } from 'playwright';
@@ -43,53 +45,57 @@ async function extractSamlFromPage(page) {
 }
 
 async function login(samlUrl, stateFile, email, password) {
-  const headless = !!(email && password);
-  const browser = await chromium.launch({ headless });
+  // Always headful: the tenant enforces 2FA, which a headless login can't
+  // complete. Credentials (if given) are pre-filled so the user only has to
+  // confirm the 2FA prompt. KMSI ("Stay signed in?") is auto-answered Yes —
+  // that's what yields the persistent cookie for later headless captures.
+  const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
   const page = await context.newPage();
 
   await page.goto('https://login.microsoftonline.com');
 
-  if (email && password) {
-    // Automated Entra login
-    await page.waitForSelector('input[type="email"]', { timeout: 15_000 });
-    await page.fill('input[type="email"]', email);
-    await page.click('input[type="submit"]');
-
-    await page.waitForSelector('input[type="password"]:visible', { timeout: 15_000 });
-    await page.fill('input[type="password"]', password);
-    await page.click('input[type="submit"]');
-
-    // "Stay signed in?" prompt — click Yes
+  if (email) {
     try {
-      await page.waitForSelector('#idBtn_Back, #idSIButton9', { timeout: 10_000 });
-      const yesBtn = await page.$('#idSIButton9');
-      if (yesBtn) await yesBtn.click();
-    } catch { /* no KMSI prompt — continue */ }
-
-    await page.waitForTimeout(2000);
-  } else {
-    // Manual login — wait for user
-    try {
-      await page.waitForURL(
-        url => !url.toString().includes('login.microsoftonline.com') || url.toString().includes('kmsi'),
-        { timeout: TIMEOUT }
-      );
-      await page.waitForTimeout(3000);
-    } catch {
-      // Save state anyway — partial login may still have useful cookies
-    }
+      await page.waitForSelector('input[type="email"]', { timeout: 15_000 });
+      await page.fill('input[type="email"]', email);
+      await page.click('input[type="submit"]');
+    } catch { /* screen skipped (SSO / account picker) — user takes over */ }
   }
+  if (password) {
+    try {
+      await page.waitForSelector('input[type="password"]:visible', { timeout: 15_000 });
+      await page.fill('input[type="password"]', password);
+      await page.click('input[type="submit"]');
+    } catch { /* password screen skipped — user takes over */ }
+  }
+
+  // Wait out the 2FA dance in the visible window; auto-click KMSI Yes.
+  // The KMSI screen is the only login screen with a #idBtn_Back ("No").
+  const deadline = Date.now() + TIMEOUT;
+  while (Date.now() < deadline) {
+    if (!page.url().includes('login.microsoftonline.com')) break;
+    try {
+      if (await page.$('#idBtn_Back')) {
+        const yesBtn = await page.$('#idSIButton9');
+        if (yesBtn) await yesBtn.click();
+      }
+    } catch { /* DOM churn mid-navigation — retry next tick */ }
+    await page.waitForTimeout(1000);
+  }
+  await page.waitForTimeout(2000);
 
   await context.storageState({ path: stateFile });
 
-  // Now capture SAML in the same browser session (no second Chromium launch)
+  // Now capture SAML in the same browser session (no second Chromium launch).
+  // Generous timeout: a Conditional Access policy may demand another
+  // interaction here; resolves immediately once the POST is seen.
   const interceptor = setupSamlInterceptor(page);
   try {
     await page.goto(samlUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   } catch { /* navigation to 127.0.0.1 may fail */ }
 
-  await interceptor.waitForCapture(5000);
+  await interceptor.waitForCapture(60_000);
   const token = interceptor.response || await extractSamlFromPage(page);
 
   await browser.close();
