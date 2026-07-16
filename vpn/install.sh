@@ -45,19 +45,6 @@ case ":$PATH:" in
     *) gum log --level warn "$BIN_DIR is not on PATH — add manually: export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
 esac
 
-# Migrate: earlier installs appended a PATH line to the shell rc — remove it.
-# Write through the rc with cat instead of sed -i / mv: the rc may be a symlink
-# and replacing it would break dotfiles setups.
-for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
-    if [ -f "$rc" ] && grep -qF '# OFSZ VPN toolkit' "$rc" 2>/dev/null; then
-        tmp="$(mktemp)"
-        grep -v -e '# OFSZ VPN toolkit' -e 'ofsz-tooling/vpn' "$rc" > "$tmp" || true
-        cat "$tmp" > "$rc"
-        rm -f "$tmp"
-        gum log --level info --prefix "✓" "Legacy PATH line removed from $rc"
-    fi
-done
-
 # ── 3. Microsoft (céges) credentials ─────────────────────
 # Used for AWS SAML auth and GlobalProtect. Asked once, stored in keychain.
 HAVE_EMAIL=$(security find-generic-password -s "vpn-entra" -a "email" -w 2>/dev/null) || true

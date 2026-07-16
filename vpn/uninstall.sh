@@ -43,18 +43,6 @@ if [ -L "$HOME/.local/bin/vpn" ]; then
     rm "$HOME/.local/bin/vpn"
     gum log --level info --prefix "✓" "vpn symlink removed from ~/.local/bin"
 fi
-# Legacy installs appended a PATH line to the shell rc. Write through the rc
-# with cat instead of sed -i / mv: the rc may be a symlink and replacing it
-# would break dotfiles setups.
-for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
-    if [ -f "$rc" ] && grep -qF '# OFSZ VPN toolkit' "$rc" 2>/dev/null; then
-        tmp="$(mktemp)"
-        grep -v -e '# OFSZ VPN toolkit' -e 'ofsz-tooling/vpn' "$rc" > "$tmp" || true
-        cat "$tmp" > "$rc"
-        rm -f "$tmp"
-        gum log --level info --prefix "✓" "PATH removed from $rc"
-    fi
-done
 
 # ── 2. Remove SwiftBar symlink ───────────────────────────
 if [ -L "$SWIFTBAR_LINK" ]; then
