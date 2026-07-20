@@ -12,6 +12,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || realpath "$0")")" && pwd)"
 source "$SCRIPT_DIR/sudoers.sh"
 
+# ── Node resolver ───────────────────────────────────────────────────
+# SwiftBar/launchd contexts don't get the interactive shell's PATH, so
+# version-manager shims (fnm) and user-level homebrew are invisible there.
+if ! command -v node &>/dev/null; then
+    for _node_dir in \
+        "$HOME/.local/share/fnm/aliases/default/bin" \
+        "$HOME/Library/Application Support/fnm/aliases/default/bin" \
+        "$HOME/homebrew/bin" \
+        "/opt/homebrew/bin" \
+        "/usr/local/bin"; do
+        if [ -x "$_node_dir/node" ]; then
+            export PATH="$_node_dir:$PATH"
+            break
+        fi
+    done
+    unset _node_dir
+fi
+
 # ── Lock (prevent double-run from shell init) ───────────────────────
 LOCK_FILE="/tmp/.aws-vpn-lock"
 if [ -f "$LOCK_FILE" ] && kill -0 "$(cat "$LOCK_FILE" 2>/dev/null)" 2>/dev/null; then
