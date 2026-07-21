@@ -18,8 +18,19 @@ SUDOERS_FILE="/etc/sudoers.d/vpn"
 SUDOERS_FILE_OLD="/etc/sudoers.d/vpn-aws"
 SUDOERS_OVPN_BIN="/Applications/AWS VPN Client/AWS VPN Client.app/Contents/Resources/openvpn/acvc-openvpn"
 
+# Must resolve to the same absolute path as lib.sh:_resolve_openconnect,
+# or the installed NOPASSWD rule won't match the binary lib.sh invokes.
+# Checks stable install paths, not just PATH — SwiftBar/launchd contexts
+# don't see user-level homebrew (~/homebrew).
 _sudoers_openconnect_bin() {
-    command -v openconnect 2>/dev/null || echo /opt/homebrew/bin/openconnect
+    local c
+    for c in "$(command -v openconnect 2>/dev/null)" \
+             "$HOME/homebrew/bin/openconnect" \
+             /opt/homebrew/bin/openconnect \
+             /usr/local/bin/openconnect; do
+        [ -n "$c" ] && [ -x "$c" ] && { echo "$c"; return; }
+    done
+    echo /opt/homebrew/bin/openconnect
 }
 
 # The canonical template. Covers every sudo call the VPN tools make at

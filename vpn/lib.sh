@@ -243,7 +243,21 @@ GP_LOG_FILE="$DATA_DIR/run/globalprotect.log"
 GP_RECONNECT_FLAG="$DATA_DIR/run/gp-auto-reconnect"
 GP_KEYCHAIN_PASSWORD="vpn-gp"
 GP_KEYCHAIN_USER="vpn-gp-user"
-OPENCONNECT_BIN="$(command -v openconnect 2>/dev/null || echo /opt/homebrew/bin/openconnect)"
+# PATH alone is not enough: SwiftBar/launchd contexts don't get the
+# interactive shell's PATH, and user-level homebrew (~/homebrew, non-admin
+# machines) is never on the default PATH. Must resolve to the same absolute
+# path as sudoers.sh:_sudoers_openconnect_bin, or the NOPASSWD rule won't match.
+_resolve_openconnect() {
+    local c
+    for c in "$(command -v openconnect 2>/dev/null)" \
+             "$HOME/homebrew/bin/openconnect" \
+             /opt/homebrew/bin/openconnect \
+             /usr/local/bin/openconnect; do
+        [ -n "$c" ] && [ -x "$c" ] && { echo "$c"; return; }
+    done
+    echo /opt/homebrew/bin/openconnect
+}
+OPENCONNECT_BIN="$(_resolve_openconnect)"
 
 gp_get_password() {
     local pw
