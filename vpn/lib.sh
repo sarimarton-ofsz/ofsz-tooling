@@ -92,44 +92,6 @@ ts_watchdog_stop() {
     fi
 }
 
-# ── Tailscale exit node ────────────────────────────────────────────
-TS_EXIT_NODE_DEFAULT="${TS_EXIT_NODE_DEFAULT:-neobank-ci}"
-
-ts_exit_node_current() {
-    # Prints the hostname of the currently active exit node, empty if none.
-    "$TS_CLI" status --json 2>/dev/null | python3 -c '
-import json, sys
-try: d = json.load(sys.stdin)
-except Exception: sys.exit(0)
-en = d.get("ExitNodeStatus") or {}
-eid = en.get("ID", "")
-if not eid: sys.exit(0)
-for p in (d.get("Peer") or {}).values():
-    if p.get("ID") == eid:
-        print(p.get("HostName") or (p.get("DNSName") or "").split(".")[0])
-        break
-' 2>/dev/null
-}
-
-ts_exit_on() {
-    local node="${1:-$TS_EXIT_NODE_DEFAULT}"
-    log "Tailscale: exit node → $node (LAN access allowed)"
-    if ! "$TS_CLI" set --exit-node="$node" --exit-node-allow-lan-access=true 2>&1; then
-        err "Failed to set exit node to '$node'. Is it advertising and approved in the admin console?"
-        return 1
-    fi
-    ok "Exit node: $node"
-}
-
-ts_exit_off() {
-    log "Tailscale: disabling exit node..."
-    if ! "$TS_CLI" set --exit-node= 2>&1; then
-        err "Failed to clear exit node"
-        return 1
-    fi
-    ok "Exit node: off"
-}
-
 # ── AWS VPN Client ──────────────────────────────────────────────────
 # Uses aws-connect.sh (CLI openvpn + SAML capture) instead of the GUI app.
 AWS_VPN_PID_FILE="$DATA_DIR/run/openvpn.pid"
@@ -173,14 +135,9 @@ aws_vpn_up() {
     # that conflict. Tailscale is restored after successful connect.
     # Safety: a watchdog timer ensures Tailscale is restored within 3 minutes
     # even if the AWS Entra SAML flow hangs or crashes.
-    local ts_was_up=false ts_exit_was=""
+    local ts_was_up=false
     if [ "$(ts_status)" = "connected" ]; then
         ts_was_up=true
-        # Capture active exit node (if any) so we can restore it after the
-        # ts_up below — `tailscale up` alone does not re-enable exit-node
-        # routing, and losing it silently breaks anything tunnelled through
-        # the exit node (e.g. a GP session reachable only via magyar IP).
-        ts_exit_was=$(ts_exit_node_current)
         log "Tailscale is up — disconnecting before AWS connect..."
         ts_down || true
         ts_watchdog_start
@@ -194,10 +151,6 @@ aws_vpn_up() {
             ts_watchdog_stop
             log "Restoring Tailscale..."
             ts_up || err "Tailscale restore failed after AWS connect"
-            if [ -n "$ts_exit_was" ]; then
-                log "Restoring exit node: $ts_exit_was"
-                ts_exit_on "$ts_exit_was" || warn "Exit node restore failed"
-            fi
         fi
         return 0
     fi
@@ -207,7 +160,6 @@ aws_vpn_up() {
         ts_watchdog_stop
         log "AWS failed — restoring Tailscale..."
         ts_up || true
-        [ -n "$ts_exit_was" ] && { ts_exit_on "$ts_exit_was" || true; }
     fi
     return 1
 }
@@ -397,13 +349,10 @@ gp_up() {
 
     # Pre-flight TCP/443 reachability probe. Some networks (e.g. certain ISPs)
     # silently DROP forwarded packets to the GP gateway IP — openconnect would
-    # eventually time out, but logging a clear hint up front (and pointing at
-    # the exit-node workaround) is far friendlier than a 30s wait + cryptic log.
+    # eventually time out, but a clear error up front is far friendlier than
+    # a 30s wait + cryptic log.
     if ! nc -z -G 3 -w 3 "$portal_ip" 443 2>/dev/null; then
         err "GlobalProtect: portal $GP_PORTAL ($portal_ip) not reachable on TCP/443 from this network"
-        if [ -z "$(ts_exit_node_current)" ]; then
-            warn "Network filter likely blocking — try 'vpn exit on', then retry"
-        fi
         return 1
     fi
 
