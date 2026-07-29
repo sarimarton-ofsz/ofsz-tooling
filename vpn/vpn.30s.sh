@@ -11,8 +11,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PAT
 
 # SCRIPT_DIR: where scripts live (resolved via symlink from SwiftBar)
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || readlink "$0" 2>/dev/null || echo "$0")")" && pwd)"
-# VPN_DIR: where runtime data lives
-VPN_DIR="$HOME/.config/ofsz-tooling/vpn"
+# VPN_DIR: where runtime data lives (env-overridable for tests)
+VPN_DIR="${VPN_DIR:-$HOME/.config/ofsz-tooling/vpn}"
 VPN="$SCRIPT_DIR/vpn"
 TS_CLI="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 
@@ -21,6 +21,16 @@ GP_ENABLED=true
 [ -f "$VPN_DIR/config" ] && source "$VPN_DIR/config"
 
 # ── Fast status checks (no AppleScript — pure process/route detection) ──
+
+# A connect-in-progress writes a "<vpn>-connecting" flag file (see lib.sh).
+# Treat it as live only if recently touched — a crashed connect must not
+# pin the status to "connecting" forever.
+connecting_flag_fresh() {
+    local f="$1" max_age=300
+    [[ -f "$f" ]] || return 1
+    local age=$(( $(date +%s) - $(stat -f %m "$f" 2>/dev/null || echo 0) ))
+    (( age < max_age ))
+}
 
 fast_ts_status() {
     local raw
@@ -37,6 +47,9 @@ fast_aws_status() {
     if pgrep -qf "acvc-openvpn" 2>/dev/null; then
         echo "connected"; return
     fi
+    if connecting_flag_fresh "$VPN_DIR/run/aws-connecting"; then
+        echo "connecting"; return
+    fi
     echo "disconnected"
 }
 
@@ -48,6 +61,9 @@ fast_gp_status() {
     fi
     if pgrep -qf "openconnect.*--protocol=gp" 2>/dev/null; then
         echo "connected"; return
+    fi
+    if connecting_flag_fresh "$VPN_DIR/run/gp-connecting"; then
+        echo "connecting"; return
     fi
     echo "disconnected"
 }
@@ -70,6 +86,10 @@ aws_detail() {
     gw=$(netstat -rn -f inet 2>/dev/null | awk "/${iface:-__none__}/"'{if($1 ~ /^10\.254/){print $2; exit}}')
     echo "IP: ${ip:-?}\\nInterface: ${iface:-?}\\nGateway: ${gw:-?}"
 }
+
+# Test hook: when sourced with VPN_30S_TEST=1, stop here — functions are
+# defined, no side effects (status gathering, auto-reconnect) run. See tests/.
+[[ "${VPN_30S_TEST:-}" == "1" ]] && return 0
 
 # ── Gather status ──────────────────────────────────────────
 
@@ -174,12 +194,29 @@ expected=0
 A_RST=$'\033[0m'
 A_GREEN=$'\033[32m'
 A_YELLOW=$'\033[33m'
+A_RED=$'\033[31m'
 A_DIM=$'\033[38;5;243m'
+
+ansi_for() {
+    case "$1" in
+        connected)               echo "$A_GREEN" ;;
+        connecting|reconnecting) echo "$A_YELLOW" ;;
+        *)                       echo "$A_RED" ;;
+    esac
+}
+
+pending=false
+case "$aws" in connecting|reconnecting) pending=true ;; esac
+case "$gp"  in connecting|reconnecting) pending=true ;; esac
 
 if (( n == expected )); then
     echo "${A_GREEN}✓${A_RST} | ansi=true sfimage=lock.shield.fill sfcolor=#34C759 sfsize=14"
-elif (( n > 0 )); then
-    echo "${A_YELLOW}$n/$expected${A_RST} | ansi=true sfimage=lock.shield.fill sfcolor=#E6B310 sfsize=14"
+elif (( n > 0 )) || $pending; then
+    # Per-VPN colored initials: shows WHICH leg is down/pending, not just a count
+    title="$(ansi_for "$aws")A"
+    [[ "$GP_ENABLED" == "true" ]] && title+="$(ansi_for "$gp")G"
+    title+="$(ansi_for "$ts")T"
+    echo "${title}${A_RST} | ansi=true sfimage=lock.shield.fill sfcolor=#E6B310 sfsize=14"
 else
     echo "${A_DIM}—${A_RST} | ansi=true sfimage=lock.shield sfcolor=#8E8E93 sfsize=14"
 fi
@@ -202,6 +239,10 @@ if [[ "$aws" == "connected" ]]; then
     echo "AWS (verbose) | size=13 color=$(status_color "$aws") checked=true bash=$VPN param1=aws-down terminal=true refresh=true alternate=true"
 elif [[ "$aws" == "no-sudo" ]]; then
     echo "AWS ⚠ sudo | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=true refresh=true"
+elif [[ "$aws" == "connecting" ]]; then
+    # Connect in progress — show the current phase, no click action
+    aws_phase=$(head -1 "$VPN_DIR/run/aws-connecting" 2>/dev/null)
+    echo "AWS — ${aws_phase:-kapcsolódás…} | size=13 color=$(status_color "$aws")"
 else
     echo "AWS | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=false refresh=true"
     echo "AWS (verbose) | size=13 color=$(status_color "$aws") bash=$VPN param1=aws-up terminal=true refresh=true alternate=true"
@@ -212,6 +253,9 @@ if [[ "$GP_ENABLED" == "true" ]]; then
     if [[ "$gp" == "connected" ]]; then
         echo "GlobalProtect | size=13 color=$(status_color "$gp") checked=true bash=$VPN param1=gp-down terminal=false refresh=true"
         echo "GlobalProtect (verbose) | size=13 color=$(status_color "$gp") checked=true bash=$VPN param1=gp-down terminal=true refresh=true alternate=true"
+    elif [[ "$gp" == "connecting" ]]; then
+        gp_phase=$(head -1 "$VPN_DIR/run/gp-connecting" 2>/dev/null)
+        echo "GlobalProtect — ${gp_phase:-kapcsolódás…} | size=13 color=$(status_color "$gp")"
     else
         echo "GlobalProtect | size=13 color=$(status_color "$gp") bash=$VPN param1=gp-up terminal=false refresh=true"
         echo "GlobalProtect (verbose) | size=13 color=$(status_color "$gp") bash=$VPN param1=gp-up terminal=true refresh=true alternate=true"

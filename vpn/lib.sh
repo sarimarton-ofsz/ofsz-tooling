@@ -20,6 +20,26 @@ ok()   { echo -e "${GREEN}[vpn ✓]${NC} $*"; }
 warn() { echo -e "${YELLOW}[vpn !]${NC} $*"; }
 err()  { echo -e "${RED}[vpn ✗]${NC} $*" >&2; }
 
+# ── SwiftBar feedback ───────────────────────────────────────────────
+# A connect-in-progress writes a "<vpn>-connecting" flag (content = current
+# phase text) and pokes SwiftBar, so the menu flips to "connecting…" within
+# ~1s instead of waiting for the 30s poll. The plugin ignores flags older
+# than 5 min, so a crashed connect can't pin the status.
+swiftbar_refresh() {
+    open -g "swiftbar://refreshplugin?name=vpn.30s.sh" >/dev/null 2>&1 || true
+}
+
+connecting_set() {  # $1: aws|gp   $2: phase text shown in the menu
+    mkdir -p "$DATA_DIR/run"
+    echo "${2:-kapcsolódás…}" > "$DATA_DIR/run/$1-connecting" 2>/dev/null || true
+    swiftbar_refresh
+}
+
+connecting_clear() {  # $1: aws|gp
+    rm -f "$DATA_DIR/run/$1-connecting" 2>/dev/null || true
+    swiftbar_refresh
+}
+
 # ── Tailscale ───────────────────────────────────────────────────────
 TS_CLI="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 
@@ -135,10 +155,13 @@ aws_vpn_up() {
     # that conflict. Tailscale is restored after successful connect.
     # Safety: a watchdog timer ensures Tailscale is restored within 3 minutes
     # even if the AWS Entra SAML flow hangs or crashes.
+    connecting_set aws "kapcsolódás…"
+
     local ts_was_up=false
     if [ "$(ts_status)" = "connected" ]; then
         ts_was_up=true
         log "Tailscale is up — disconnecting before AWS connect..."
+        connecting_set aws "Tailscale lekapcsolása…"
         ts_down || true
         ts_watchdog_start
     fi
@@ -147,6 +170,7 @@ aws_vpn_up() {
     if "$SCRIPT_DIR/aws-connect.sh" up; then
         touch "$AWS_VPN_RECONNECT_FLAG"
         rm -f "$DATA_DIR/run/reconnect-aws-failures"
+        connecting_clear aws
         if $ts_was_up; then
             ts_watchdog_stop
             log "Restoring Tailscale..."
@@ -156,6 +180,7 @@ aws_vpn_up() {
     fi
 
     # AWS failed — restore Tailscale anyway
+    connecting_clear aws
     if $ts_was_up; then
         ts_watchdog_stop
         log "AWS failed — restoring Tailscale..."
@@ -166,6 +191,7 @@ aws_vpn_up() {
 
 aws_vpn_down() {
     rm -f "$AWS_VPN_RECONNECT_FLAG"
+    connecting_clear aws
     if [ "$(aws_vpn_status)" = "disconnected" ]; then
         ok "AWS VPN: already disconnected"
         return 0
@@ -268,7 +294,16 @@ gp_up() {
         ok "GlobalProtect: already connected"
         return 0
     fi
+    # Flag set/clear wraps the inner function so none of its many return
+    # points can leave a stuck "connecting" state behind.
+    connecting_set gp "kapcsolódás…"
+    local rc=0
+    _gp_up_inner || rc=$?
+    connecting_clear gp
+    return $rc
+}
 
+_gp_up_inner() {
     local user password
     if ! user=$(gp_get_user); then
         err "GlobalProtect: no username in keychain"
@@ -402,6 +437,7 @@ gp_up() {
 
 gp_down() {
     rm -f "$GP_RECONNECT_FLAG"
+    connecting_clear gp
     if [ "$(gp_status)" = "disconnected" ]; then
         ok "GlobalProtect: already disconnected"
         return 0

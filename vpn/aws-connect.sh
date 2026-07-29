@@ -56,6 +56,14 @@ ok()   { echo -e "${GREEN}[aws-vpn ✓]${NC} $*" >&2; }
 warn() { echo -e "${YELLOW}[aws-vpn !]${NC} $*" >&2; }
 err()  { echo -e "${RED}[aws-vpn ✗]${NC} $*" >&2; }
 
+# Live phase feedback for the SwiftBar menu: the flag file's content is shown
+# as "AWS — <phase>" (see vpn.30s.sh), the URL poke makes it appear instantly.
+# Must never fail (set -e) and never write to stdout (callers capture it).
+phase() {
+    { echo "$1" > "$RUNTIME_DIR/aws-connecting" && \
+      open -g "swiftbar://refreshplugin?name=vpn.30s.sh"; } >/dev/null 2>&1 || true
+}
+
 
 # ── Preflight checks ─────────────────────────────────────────────
 # Validates all prerequisites before attempting connection.
@@ -140,6 +148,7 @@ get_saml_info() {
     local ovpn_config="$1"
 
     log "Csatlakozás az AWS szerverhez..."
+    phase "csatlakozás az AWS szerverhez…"
 
     # openvpn connects, gets AUTH_FAILED with CRV1 response — no tun device needed
     # Response format: AUTH_FAILED,CRV1:R:<SID>:<extra>:<SAML_URL>
@@ -199,6 +208,7 @@ do_connect() {
     # Try headless first if we have a saved session
     if [ -f "$pw_state" ]; then
         log "Headless SAML (mentett session)..."
+        phase "SAML login (mentett session)…"
         if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" saml "$saml_url" "$pw_state" 2>/dev/null); then
             ok "SAML response captured (headless)!"
             echo "$saml_response" > "$SAML_RESPONSE_FILE"
@@ -227,6 +237,7 @@ do_connect() {
         else
             log "Entra login (böngészőablak) — jelentkezz be kézzel..."
         fi
+        phase "Entra login — 2FA jóváhagyásra vár…"
         osascript -e 'display notification "Jóváhagyás szükséges a böngészőablakban (2FA)" with title "AWS VPN"' 2>/dev/null || true
         if saml_response=$(node "$SCRIPT_DIR/pw-saml.mjs" login "$saml_url" "$pw_state" "$email" "$password"); then
             ok "SAML response captured!"
@@ -243,6 +254,7 @@ do_connect() {
 
     # Phase 2: VPN connection (sudo needed for tun device)
     log "VPN tunnel felépítése..."
+    phase "tunnel felépítése…"
     # Pre-create log+pid as user (writable by root via 666) so we can read them later
     rm -f "$OVPN_PID_FILE" 2>/dev/null || true
     touch "$OVPN_LOG" "$OVPN_PID_FILE"
@@ -286,6 +298,11 @@ do_connect() {
     while [ $j -lt 15 ]; do
         if grep -q "Initialization Sequence Completed" "$OVPN_LOG" 2>/dev/null; then
             ok "VPN connected!"
+            if [ "${VPN_NONINTERACTIVE:-0}" = "1" ]; then
+                osascript -e 'display notification "Automatikusan újracsatlakozott ✓" with title "AWS VPN"' 2>/dev/null || true
+            else
+                osascript -e 'display notification "Csatlakozva ✓" with title "AWS VPN"' 2>/dev/null || true
+            fi
             rm -f "$SAML_RESPONSE_FILE"
             return 0
         fi
